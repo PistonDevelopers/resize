@@ -2,6 +2,13 @@
 name = "resize"
 version = "0.0.0"
 authors = ["Kagami Hiiragi <kagami@genshiken.org>"]
+description = "Simple resampling library in pure Rust."
+keywords = ["image", "resize", "resample", "graphics"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/PistonDevelopers/resize"
+repository = "https://github.com/PistonDevelopers/resize.git"
+documentation = "http://docs.piston.rs/resize/resize/"
 
 [dev-dependencies]
 png = "0.3"
