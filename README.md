@@ -19,7 +19,7 @@ let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
 resizer.run(&src, &mut dst);
 ```
 
-See also [this example](examples/resize.rs). Comparision with IM for the same filter:
+See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](examples/resize.rs). Comparision with IM for the same filter:
 
 ```bash
 cd examples
