@@ -1,6 +1,6 @@
 [package]
 name = "resize"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["Kagami Hiiragi <kagami@genshiken.org>"]
 description = "Simple resampling library in pure Rust."
 keywords = ["image", "resize", "resample", "graphics"]
