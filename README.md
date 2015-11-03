@@ -19,25 +19,29 @@ let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
 resizer.run(&src, &mut dst);
 ```
 
-See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](examples/resize.rs). Comparision with IM for the same filter:
+See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](examples/resize.rs).
+
+## Triangle test
+
+Comparision of IM with libswscale:
 
 ```bash
 cd examples
-../target/debug/examples/resize tiger.png 540x360 rust.png
 convert tiger.png -filter Triangle -resize 540x360 im.png
-compare rust.png im.png -compose src diff-rust-im.png
-```
-
-![](https://raw.githubusercontent.com/PistonDevelopers/resize/master/examples/diff-rust-im.png)
-
-Comparision IM with libswscale:
-
-```bash
 ffmpeg -i tiger.png -vf scale=540:360:flags=bilinear sws.png
 compare sws.png im.png -compose src diff-sws-im.png
 ```
 
 ![](https://raw.githubusercontent.com/PistonDevelopers/resize/master/examples/diff-sws-im.png)
+
+Comparision of this library with IM:
+
+```bash
+../target/debug/examples/resize tiger.png 540x360 rust.png
+compare rust.png im.png -compose src diff-rust-im.png
+```
+
+![](https://raw.githubusercontent.com/PistonDevelopers/resize/master/examples/diff-rust-im.png)
 
 ## License
 
