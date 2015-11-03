@@ -1,0 +1,7 @@
+[package]
+name = "resize"
+version = "0.0.0"
+authors = ["Kagami Hiiragi <kagami@genshiken.org>"]
+
+[dev-dependencies]
+png = "0.3"
