@@ -1,24 +1,51 @@
 //! Simple resampling library in pure Rust.
+//!
+//! # Examples
+//!
+//! ```ignore
+//! extern crate resize;
+//! use resize::Type::Triangle;
+//! let mut src = vec![0;w1*h1];
+//! let mut dst = vec![0;w2*h2];
+//! let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
+//! resizer.resize(&src, &mut dst);
+//! ```
+// Current implementation is based on:
+// * https://github.com/sekrit-twc/zimg/tree/master/src/zimg/resize
+// * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
 #![deny(missing_docs)]
 
 use std::f32;
 
 /// Resizing type to use.
 pub enum Type {
-    /// Triangle (bilinear) filter.
+    /// Triangle (bilinear) resizing.
     Triangle,
-    /// Sinc-windowed filter with radius of 3.
+    /// Resize using sinc-windowed filter with radius of 3.
     Lanczos3,
-    /// Custom filter.
+    /// Resize using custom filter.
     Custom(Filter),
 }
 
 /// Resampling filter.
 pub struct Filter {
-    /// Filter kernel.
-    pub kernel: Box<Fn(f32) -> f32>,
-    /// Filter support.
-    pub support: f32,
+    kernel: Box<Fn(f32) -> f32>,
+    support: f32,
+}
+
+impl Filter {
+    /// Create a new filter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resize::Filter;
+    /// fn nearest(x: f32) -> f32 { f32::round(x) }
+    /// let filter = Filter::new(Box::new(nearest), 0.5);
+    /// ```
+    pub fn new(kernel: Box<Fn(f32) -> f32>, support: f32) -> Filter {
+        Filter {kernel: kernel, support: support}
+    }
 }
 
 #[inline]
@@ -45,10 +72,8 @@ fn lanczos3_kernel(x: f32) -> f32 {
     }
 }
 
-/// Simple resampler with preallocated buffers and coeffecients for the given
-/// dimensions. See also:
-/// * https://github.com/sekrit-twc/zimg/tree/master/src/zimg/resize
-/// * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
+/// Resampler with preallocated buffers and coeffecients for the given
+/// dimensions and filter type.
 #[derive(Debug)]
 pub struct Resizer {
     // Source/target dimensions.
@@ -69,17 +94,11 @@ struct CoeffsLine {
 }
 
 impl Resizer {
-    /// Create a new resizer instance for the given dimensions and filter.
+    /// Create a new resizer instance.
     pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, t: Type) -> Resizer {
         let filter = match t {
-            Type::Triangle => Filter {
-                kernel: Box::new(triangle_kernel),
-                support: 1.0,
-            },
-            Type::Lanczos3 => Filter {
-                kernel: Box::new(lanczos3_kernel),
-                support: 3.0,
-            },
+            Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
+            Type::Lanczos3 => Filter::new(Box::new(lanczos3_kernel), 3.0),
             Type::Custom(f) => f,
         };
         Resizer {
@@ -138,9 +157,8 @@ impl Resizer {
         v as u8
     }
 
-    /// Resample W1xH1 to W1xH2.
+    // Resample W1xH1 to W1xH2.
     fn sample_rows(&mut self, src: &[u8]) {
-        // FIXME(Kagami): Avoid bound checkings.
         let mut offset = 0;
         for x1 in 0..self.w1 {
             for y2 in 0..self.h2 {
@@ -157,7 +175,7 @@ impl Resizer {
         }
     }
 
-    /// Resample W1xH2 to W2xH2.
+    // Resample W1xH2 to W2xH2.
     fn sample_cols(&self, dst: &mut [u8]) {
         let mut offset = 0;
         for y2 in 0..self.h2 {
@@ -176,7 +194,11 @@ impl Resizer {
     }
 
     /// Resize `src` image data into `dst`.
-    pub fn run(&mut self, src: &[u8], dst: &mut [u8]) {
+    pub fn resize(&mut self, src: &[u8], dst: &mut [u8]) {
+        // TODO:
+        // * Multi-thread
+        // * Bound checkings
+        // * SIMD
         assert_eq!(src.len(), self.w1 * self.h1);
         assert_eq!(dst.len(), self.w2 * self.h2);
         self.sample_rows(src);
@@ -187,4 +209,15 @@ impl Resizer {
 /// Create a new resizer instance. Alias for `Resizer::new`.
 pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, t: Type) -> Resizer {
     Resizer::new(w1, h1, w2, h2, t)
+}
+
+/// Resize image data to the new dimension in a single step.
+///
+/// **NOTE:** If you need to resize to the same dimension multiple times,
+/// consider creating an resizer instance since it's faster.
+pub fn resize(
+    w1: usize, h1: usize, w2: usize, h2: usize, t: Type,
+    src: &[u8], dst: &mut [u8],
+) {
+    Resizer::new(w1, h1, w2, h2, t).resize(src, dst)
 }

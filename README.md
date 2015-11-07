@@ -2,7 +2,8 @@
 
 Simple resampling library in pure Rust.
 
-Features:
+## Features
+
 * No dependencies, minimal abstractions
 * No encoders/decoders, meant to be used with some external library
 * Tuned for resizing to the same dimensions multiple times: uses preallocated buffers and matrixes
@@ -16,14 +17,14 @@ use resize::Type::Triangle;
 let mut src = vec![0;w1*h1];
 let mut dst = vec![0;w2*h2];
 let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
-resizer.run(&src, &mut dst);
+resizer.resize(&src, &mut dst);
 ```
 
 See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](examples/resize.rs).
 
 ## Triangle test
 
-Comparision of IM with libswscale:
+Comparision of libswscale with IM:
 
 ```bash
 cd examples
@@ -45,5 +46,5 @@ compare rust.png im.png -compose src diff-rust-im.png
 
 ## License
 
-* Library licensed under [MIT](LICENSE)
-* Image used in examples licensed under [CC BY-SA 3.0](https://commons.wikimedia.org/wiki/File%3A08-2011._Panthera_tigris_tigris_-_Texas_Park_-_Lanzarote_-TP04.jpg)
+* Library is licensed under [MIT](LICENSE)
+* Image used in examples is licensed under [CC BY-SA 3.0](https://commons.wikimedia.org/wiki/File%3A08-2011._Panthera_tigris_tigris_-_Texas_Park_-_Lanzarote_-TP04.jpg)
