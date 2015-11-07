@@ -13,10 +13,11 @@ Simple resampling library in pure Rust.
 
 ```rust
 extern crate resize;
+use resize::Pixel::Gray8;
 use resize::Type::Triangle;
 let mut src = vec![0;w1*h1];
 let mut dst = vec![0;w2*h2];
-let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
+let mut resizer = resize::new(w1, h1, w2, h2, Gray8, Triangle);
 resizer.resize(&src, &mut dst);
 ```
 

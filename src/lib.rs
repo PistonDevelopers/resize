@@ -4,10 +4,11 @@
 //!
 //! ```ignore
 //! extern crate resize;
+//! use resize::Pixel::Gray8;
 //! use resize::Type::Triangle;
 //! let mut src = vec![0;w1*h1];
 //! let mut dst = vec![0;w2*h2];
-//! let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
+//! let mut resizer = resize::new(w1, h1, w2, h2, Gray8, Triangle);
 //! resizer.resize(&src, &mut dst);
 //! ```
 // Current implementation is based on:
@@ -72,6 +73,40 @@ fn lanczos3_kernel(x: f32) -> f32 {
     }
 }
 
+/// Supported pixel formats.
+// TODO(Kagami): >8-bit formats.
+#[derive(Debug, Clone, Copy)]
+pub enum Pixel {
+    /// Grayscale, 8-bit.
+    Gray8,
+    /// RGB, 8-bit per component.
+    RGB24,
+    /// RGBA, 8-bit per component.
+    RGBA,
+}
+
+impl Pixel {
+    /// Size of one pixel in that format in bytes.
+    #[inline]
+    pub fn get_size(&self) -> usize {
+        match *self {
+            Pixel::Gray8 => 1,
+            Pixel::RGB24 => 3,
+            Pixel::RGBA => 4,
+        }
+    }
+
+    /// Return number of components of that format.
+    #[inline]
+    pub fn get_ncomponents(&self) -> usize {
+        match *self {
+            Pixel::Gray8 => 1,
+            Pixel::RGB24 => 3,
+            Pixel::RGBA => 4,
+        }
+    }
+}
+
 /// Resampler with preallocated buffers and coeffecients for the given
 /// dimensions and filter type.
 #[derive(Debug)]
@@ -81,8 +116,10 @@ pub struct Resizer {
     h1: usize,
     w2: usize,
     h2: usize,
+    pix_fmt: Pixel,
     // Temporary/preallocated stuff.
     tmp: Vec<f32>,
+    accum: Vec<f32>,
     coeffs_w: Vec<CoeffsLine>,
     coeffs_h: Vec<CoeffsLine>,
 }
@@ -95,7 +132,7 @@ struct CoeffsLine {
 
 impl Resizer {
     /// Create a new resizer instance.
-    pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, t: Type) -> Resizer {
+    pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
         let filter = match t {
             Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
             Type::Lanczos3 => Filter::new(Box::new(lanczos3_kernel), 3.0),
@@ -106,7 +143,9 @@ impl Resizer {
             h1: h1,
             w2: w2,
             h2: h2,
-            tmp: vec![0.0;w1*h2],
+            pix_fmt: p,
+            tmp: vec![0.0;w1*h2*p.get_size()],
+            accum: vec![0.0;p.get_ncomponents()],
             // TODO(Kagami): Use same coeffs if w1 = h1 = w2 = h2?
             coeffs_w: Self::calc_coeffs(w1, w2, &filter),
             coeffs_h: Self::calc_coeffs(h1, h2, &filter),
@@ -157,58 +196,77 @@ impl Resizer {
         v as u8
     }
 
+    #[inline]
+    fn clear_accum(&mut self) {
+        for v in self.accum.iter_mut() {
+            *v = 0.0;
+        }
+    }
+
     // Resample W1xH1 to W1xH2.
     fn sample_rows(&mut self, src: &[u8]) {
+        let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         for x1 in 0..self.w1 {
             for y2 in 0..self.h2 {
+                self.clear_accum();
                 let ref line = self.coeffs_h[y2];
-                let mut accum = 0.0;
                 for (i, coeff) in line.data.iter().enumerate() {
                     let y0 = line.left + i;
-                    let p = src[y0*self.w1 + x1] as f32;
-                    accum += p * coeff;
+                    let base = (y0 * self.w1 + x1) * ncomp;
+                    for n in 0..ncomp {
+                        let p = src[base + n] as f32;
+                        self.accum[n] += p * coeff;
+                    }
                 }
-                self.tmp[offset] = accum;
-                offset += 1;
+                for &v in &self.accum {
+                    self.tmp[offset] = v;
+                    offset += 1;
+                }
             }
         }
     }
 
     // Resample W1xH2 to W2xH2.
-    fn sample_cols(&self, dst: &mut [u8]) {
+    fn sample_cols(&mut self, dst: &mut [u8]) {
+        let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         for y2 in 0..self.h2 {
             for x2 in 0..self.w2 {
+                self.clear_accum();
                 let ref line = self.coeffs_w[x2];
-                let mut accum = 0.0;
                 for (i, coeff) in line.data.iter().enumerate() {
                     let x0 = line.left + i;
-                    let p = self.tmp[x0*self.h2 + y2];
-                    accum += p * coeff;
+                    let base = (x0 * self.h2 + y2) * ncomp;
+                    for n in 0..ncomp {
+                        let p = self.tmp[base + n];
+                        self.accum[n] += p * coeff;
+                    }
                 }
-                dst[offset] = Self::pack_u8(accum);
-                offset += 1;
+                for &v in &self.accum {
+                    dst[offset] = Self::pack_u8(v);
+                    offset += 1;
+                }
             }
         }
     }
 
     /// Resize `src` image data into `dst`.
     pub fn resize(&mut self, src: &[u8], dst: &mut [u8]) {
-        // TODO:
+        // TODO(Kagami):
         // * Multi-thread
         // * Bound checkings
         // * SIMD
-        assert_eq!(src.len(), self.w1 * self.h1);
-        assert_eq!(dst.len(), self.w2 * self.h2);
+        assert_eq!(src.len(), self.w1 * self.h1 * self.pix_fmt.get_size());
+        assert_eq!(dst.len(), self.w2 * self.h2 * self.pix_fmt.get_size());
         self.sample_rows(src);
         self.sample_cols(dst)
     }
 }
 
 /// Create a new resizer instance. Alias for `Resizer::new`.
-pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, t: Type) -> Resizer {
-    Resizer::new(w1, h1, w2, h2, t)
+pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
+    Resizer::new(w1, h1, w2, h2, p, t)
 }
 
 /// Resize image data to the new dimension in a single step.
@@ -216,8 +274,9 @@ pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, t: Type) -> Resizer {
 /// **NOTE:** If you need to resize to the same dimension multiple times,
 /// consider creating an resizer instance since it's faster.
 pub fn resize(
-    w1: usize, h1: usize, w2: usize, h2: usize, t: Type,
+    w1: usize, h1: usize, w2: usize, h2: usize,
+    p: Pixel, t: Type,
     src: &[u8], dst: &mut [u8],
 ) {
-    Resizer::new(w1, h1, w2, h2, t).resize(src, dst)
+    Resizer::new(w1, h1, w2, h2, p, t).resize(src, dst)
 }
