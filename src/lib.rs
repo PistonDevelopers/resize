@@ -1,4 +1,15 @@
 //! Simple resampling library in pure Rust.
+//!
+//! # Examples
+//!
+//! ```ignore
+//! extern crate resize;
+//! use resize::Type::Triangle;
+//! let mut src = vec![0;w1*h1];
+//! let mut dst = vec![0;w2*h2];
+//! let mut resizer = resize::new(w1, h1, w2, h2, Triangle);
+//! resizer.resize(&src, &mut dst);
+//! ```
 // Current implementation is based on:
 // * https://github.com/sekrit-twc/zimg/tree/master/src/zimg/resize
 // * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
@@ -24,6 +35,14 @@ pub struct Filter {
 
 impl Filter {
     /// Create a new filter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resize::Filter;
+    /// fn nearest(x: f32) -> f32 { f32::round(x) }
+    /// let filter = Filter::new(Box::new(nearest), 0.5);
+    /// ```
     pub fn new(kernel: Box<Fn(f32) -> f32>, support: f32) -> Filter {
         Filter {kernel: kernel, support: support}
     }
@@ -54,7 +73,7 @@ fn lanczos3_kernel(x: f32) -> f32 {
 }
 
 /// Resampler with preallocated buffers and coeffecients for the given
-/// dimensions.
+/// dimensions and filter type.
 #[derive(Debug)]
 pub struct Resizer {
     // Source/target dimensions.

@@ -2,7 +2,8 @@
 
 Simple resampling library in pure Rust.
 
-Features:
+## Features
+
 * No dependencies, minimal abstractions
 * No encoders/decoders, meant to be used with some external library
 * Tuned for resizing to the same dimensions multiple times: uses preallocated buffers and matrixes
