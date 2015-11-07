@@ -1,5 +1,3 @@
 /target/
 /Cargo.lock
-/examples/rust*.png
-/examples/im*.png
-/examples/sws*.png
+/examples/*.png
