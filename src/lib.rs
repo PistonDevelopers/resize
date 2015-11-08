@@ -20,8 +20,14 @@ use std::f32;
 
 /// Resizing type to use.
 pub enum Type {
+    /// Point resizing.
+    Point,
+    /// Box (nearest) resizing.
+    Nearest,
     /// Triangle (bilinear) resizing.
     Triangle,
+    /// Catmull-Rom (bicubic) resizing.
+    Catrom,
     /// Resize using sinc-windowed filter with radius of 3.
     Lanczos3,
     /// Resize using custom filter.
@@ -41,8 +47,8 @@ impl Filter {
     ///
     /// ```
     /// use resize::Filter;
-    /// fn nearest(x: f32) -> f32 { f32::round(x) }
-    /// let filter = Filter::new(Box::new(nearest), 0.5);
+    /// fn kernel(x: f32) -> f32 { f32::round(x) }
+    /// let filter = Filter::new(Box::new(kernel), 0.5);
     /// ```
     pub fn new(kernel: Box<Fn(f32) -> f32>, support: f32) -> Filter {
         Filter {kernel: kernel, support: support}
@@ -50,8 +56,45 @@ impl Filter {
 }
 
 #[inline]
+fn point_kernel(_: f32) -> f32 {
+    1.0
+}
+
+#[inline]
+fn box_kernel(x: f32) -> f32 {
+    if x.abs() <= 0.5 { 1.0 } else { 0.0 }
+}
+
+#[inline]
 fn triangle_kernel(x: f32) -> f32 {
     f32::max(1.0 - x.abs(), 0.0)
+}
+
+// Taken from
+// https://github.com/PistonDevelopers/image/blob/2921cd7/src/imageops/sample.rs#L68
+// Probably may be optimized a bit, see e.g.
+// https://github.com/sekrit-twc/zimg/blob/1a606c0/src/zimg/resize/filter.cpp#L149
+#[inline]
+fn bc_cubic_spline(x: f32, b: f32, c: f32) -> f32 {
+    let a = x.abs();
+    let k = if a < 1.0 {
+        (12.0 - 9.0 * b - 6.0 * c) * a.powi(3) +
+        (-18.0 + 12.0 * b + 6.0 * c) * a.powi(2) +
+        (6.0 - 2.0 * b)
+    } else if a < 2.0 {
+        (-b - 6.0 * c) * a.powi(3) +
+        (6.0 * b + 30.0 * c) * a.powi(2) +
+        (-12.0 * b - 48.0 * c) * a +
+        (8.0 * b + 24.0 * c)
+    } else {
+        0.0
+    };
+    k / 6.0
+}
+
+#[inline]
+fn catrom_kernel(x: f32) -> f32 {
+    bc_cubic_spline(x, 0.0, 0.5)
 }
 
 #[inline]
@@ -134,8 +177,11 @@ impl Resizer {
     /// Create a new resizer instance.
     pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
         let filter = match t {
-            Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
-            Type::Lanczos3 => Filter::new(Box::new(lanczos3_kernel), 3.0),
+            Type::Point     => Filter::new(Box::new(point_kernel),    0.0),
+            Type::Nearest   => Filter::new(Box::new(box_kernel),      0.5),
+            Type::Triangle  => Filter::new(Box::new(triangle_kernel), 1.0),
+            Type::Catrom    => Filter::new(Box::new(catrom_kernel),   2.0),
+            Type::Lanczos3  => Filter::new(Box::new(lanczos3_kernel), 3.0),
             Type::Custom(f) => f,
         };
         Resizer {
