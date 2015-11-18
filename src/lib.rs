@@ -28,9 +28,7 @@ pub enum Type {
     Catrom,
     /// Resize using Mitchell-Netravali filter.
     Mitchell,
-    /// Resize using sinc-windowed filter with radius of 2.
-    Lanczos2,
-    /// Sinc-windowed filter with radius of 3.
+    /// Resize using sinc-windowed filter with radius of 3.
     Lanczos3,
     /// Resize using custom filter.
     Custom(Filter),
@@ -55,6 +53,16 @@ impl Filter {
     pub fn new(kernel: Box<Fn(f32) -> f32>, support: f32) -> Filter {
         Filter {kernel: kernel, support: support}
     }
+
+    /// Helper to create Cubic filter with custom B and C parameters.
+    pub fn new_cubic(b: f32, c: f32) -> Filter {
+        Filter::new(Box::new(move |x| cubic_bc(b, c, x)), 2.0)
+    }
+
+    /// Helper to create Lanczos filter with custom radius.
+    pub fn new_lanczos(radius: f32) -> Filter {
+        Filter::new(Box::new(move |x| lanczos(radius, x)), radius)
+    }
 }
 
 #[inline]
@@ -69,7 +77,7 @@ fn triangle_kernel(x: f32) -> f32 {
 
 // Taken from
 // https://github.com/PistonDevelopers/image/blob/2921cd7/src/imageops/sample.rs#L68
-// Could be optimized for known B and C, see e.g.:
+// TODO(Kagami): Could be optimized for known B and C, see e.g.
 // https://github.com/sekrit-twc/zimg/blob/1a606c0/src/zimg/resize/filter.cpp#L149
 #[inline]
 fn cubic_bc(b: f32, c: f32, x: f32) -> f32 {
@@ -169,12 +177,11 @@ impl Resizer {
     /// Create a new resizer instance.
     pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
         let filter = match t {
-            Type::Point     => Filter::new(Box::new(point_kernel),                      0.0),
-            Type::Triangle  => Filter::new(Box::new(triangle_kernel),                   1.0),
-            Type::Catrom    => Filter::new(Box::new(|x| cubic_bc(0.0,     0.5,     x)), 2.0),
-            Type::Mitchell  => Filter::new(Box::new(|x| cubic_bc(1.0/3.0, 1.0/3.0, x)), 2.0),
-            Type::Lanczos2  => Filter::new(Box::new(|x| lanczos(2.0, x)),               2.0),
-            Type::Lanczos3  => Filter::new(Box::new(|x| lanczos(3.0, x)),               3.0),
+            Type::Point => Filter::new(Box::new(point_kernel), 0.0),
+            Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
+            Type::Catrom => Filter::new_cubic(0.0, 0.5),
+            Type::Mitchell => Filter::new_cubic(1.0/3.0, 1.0/3.0),
+            Type::Lanczos3 => Filter::new_lanczos(3.0),
             Type::Custom(f) => f,
         };
         Resizer {
