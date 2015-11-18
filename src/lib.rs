@@ -51,8 +51,8 @@ impl Filter {
     ///
     /// ```
     /// use resize::Filter;
-    /// fn kernel(x: f32) -> f32 { f32::round(x) }
-    /// let filter = Filter::new(Box::new(kernel), 0.5);
+    /// fn kernel(x: f32) -> f32 { f32::max(1.0 - x.abs(), 0.0) }
+    /// let filter = Filter::new(Box::new(kernel), 1.0);
     /// ```
     pub fn new(kernel: Box<Fn(f32) -> f32>, support: f32) -> Filter {
         Filter {kernel: kernel, support: support}
