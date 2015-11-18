@@ -236,8 +236,8 @@ impl Resizer {
     }
 
     #[inline]
-    fn pack_u8(v: f32) -> u8 {
-        let mut v = v.round();
+    fn pack_u8(mut v: f32) -> u8 {
+        v = v.round();
         v = f32::min(f32::max(v, 0.0), 255.0);
         v as u8
     }
