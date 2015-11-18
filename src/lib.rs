@@ -22,8 +22,6 @@ use std::f32;
 pub enum Type {
     /// Point resizing.
     Point,
-    /// Box (nearest) resizing.
-    Nearest,
     /// Triangle (bilinear) resizing.
     Triangle,
     /// Catmull-Rom (bicubic) resizing.
@@ -62,11 +60,6 @@ impl Filter {
 #[inline]
 fn point_kernel(_: f32) -> f32 {
     1.0
-}
-
-#[inline]
-fn box_kernel(x: f32) -> f32 {
-    if x.abs() <= 0.5 { 1.0 } else { 0.0 }
 }
 
 #[inline]
@@ -177,9 +170,8 @@ impl Resizer {
     pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
         let filter = match t {
             Type::Point     => Filter::new(Box::new(point_kernel),                      0.0),
-            Type::Nearest   => Filter::new(Box::new(box_kernel),                        0.5),
             Type::Triangle  => Filter::new(Box::new(triangle_kernel),                   1.0),
-            Type::Catrom    => Filter::new(Box::new(|x| cubic_bc(0.0, 0.5, x)),         2.0),
+            Type::Catrom    => Filter::new(Box::new(|x| cubic_bc(0.0,     0.5,     x)), 2.0),
             Type::Mitchell  => Filter::new(Box::new(|x| cubic_bc(1.0/3.0, 1.0/3.0, x)), 2.0),
             Type::Lanczos2  => Filter::new(Box::new(|x| lanczos(2.0, x)),               2.0),
             Type::Lanczos3  => Filter::new(Box::new(|x| lanczos(3.0, x)),               3.0),
