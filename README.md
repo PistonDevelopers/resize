@@ -7,7 +7,7 @@ Simple resampling library in pure Rust.
 * No dependencies, minimal abstractions
 * No encoders/decoders, meant to be used with some external library
 * Tuned for resizing to the same dimensions multiple times: uses preallocated buffers and matrixes
-* Tuned to have result as close as possible to ImageMagick
+* Tuned to have result as close as possible to ImageMagick (Q16 HDRI)
 
 ## Usage
 
@@ -23,9 +23,13 @@ resizer.resize(&src, &mut dst);
 
 See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](examples/resize.rs).
 
+## Recommendations
+
+Read [this](http://www.imagemagick.org/Usage/filter/) and [this](http://www.imagemagick.org/Usage/filter/nicolas/) great articles on image resizing technics and resampling filters. Tldr; (with built-in filters of this library) use `Lanczos3` for downscaling, use `Mitchell` for upscaling. You may also want to [downscale in linear colorspace](http://www.imagemagick.org/Usage/resize/#resize_colorspace) (but not upscale). Gamma correction routines currently not included to the library, but actually quite simple to accomplish manually, see [here](https://en.wikipedia.org/wiki/Gamma_correction) for some basic theory.
+
 ## Triangle test
 
-Comparision of libswscale with IM:
+Comparision of libswscale (4.0.100) with IM (6.9.2.0 Q16 HDRI):
 
 ```bash
 cd examples
@@ -36,7 +40,7 @@ compare sws.png im.png -compose src diff-sws-im.png
 
 ![](https://raw.githubusercontent.com/PistonDevelopers/resize/master/examples/diff-sws-im.png)
 
-Comparision of this library with IM:
+Comparision of this library (0.1.0) with IM (6.9.2.0 Q16 HDRI):
 
 ```bash
 ../target/debug/examples/resize tiger.png 540x360 rust.png
