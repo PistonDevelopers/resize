@@ -2,13 +2,21 @@
 //!
 //! # Examples
 //!
-//! ```ignore
-//! extern crate resize;
-//! use resize::Pixel::Gray8;
-//! use resize::Type::Triangle;
-//! let mut src = vec![0;w1*h1];
-//! let mut dst = vec![0;w2*h2];
-//! let mut resizer = resize::new(w1, h1, w2, h2, Gray8, Triangle);
+//! ```
+//! use resize::Pixel::RGB24;
+//! use resize::Type::Lanczos3;
+//!
+//! // Downscale by 2x.
+//! let (w1, h1) = (640, 480);
+//! let (w2, h2) = (320, 240);
+//! // Don't forget to fill `src` with image data (RGB24).
+//! let src = vec![0;w1*h1*3];
+//! // Destination buffer. Must be mutable.
+//! let mut dst = vec![0;w2*h2*3];
+//! // Create reusable instance.
+//! let mut resizer = resize::new(w1, h1, w2, h2, RGB24, Lanczos3);
+//! // Do resize without heap allocations.
+//! // Might be executed multiple times for different `src` or `dst`.
 //! resizer.resize(&src, &mut dst);
 //! ```
 // Current implementation is based on:

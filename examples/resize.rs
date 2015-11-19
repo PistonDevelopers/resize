@@ -21,6 +21,7 @@ fn main() {
     let dst_dims: Vec<_> = args[2].split("x").map(|s| s.parse().unwrap()).collect();
     let (w2, h2) = (dst_dims[0], dst_dims[1]);
     let mut dst = vec![0;w2*h2];
+    // TODO(Kagami): Support RGB24, RGBA and custom filters.
     resize::resize(w1, h1, w2, h2, Gray8, Triangle, &src, &mut dst);
 
     let outfh = File::create(&args[3]).unwrap();
