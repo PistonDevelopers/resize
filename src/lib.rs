@@ -36,9 +36,9 @@ pub enum Type {
     Catrom,
     /// Resize using Mitchell-Netravali filter.
     Mitchell,
-    /// Resize using sinc-windowed filter with radius of 3.
+    /// Resize using Sinc-windowed Sinc with radius of 3.
     Lanczos3,
-    /// Resize using custom filter.
+    /// Resize with custom filter.
     Custom(Filter),
 }
 
