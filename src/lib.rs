@@ -141,17 +141,36 @@ pub mod Pixel {
 
 /// See `Pixel`
 pub trait PixelFormat: Copy {
+    /// Array to hold temporary values
+    type Accumulator: AsRef<[f32]> + AsMut<[f32]>;
+
+    /// New empty Accumulator
+    fn new_accum() -> Self::Accumulator;
+
     /// Size of one pixel in that format in bytes.
     fn get_size(&self) -> usize {
         self.get_ncomponents()
     }
 
     /// Return number of components of that format.
-    fn get_ncomponents(&self) -> usize;
+    #[inline(always)]
+    fn get_ncomponents(&self) -> usize {
+        Self::new_accum().as_ref().len()
+    }
 }
-impl PixelFormat for Pixel::Gray8 { fn get_ncomponents(&self) -> usize {1}}
-impl PixelFormat for Pixel::RGB24 { fn get_ncomponents(&self) -> usize {3}}
-impl PixelFormat for Pixel::RGBA  { fn get_ncomponents(&self) -> usize {4}}
+
+impl PixelFormat for Pixel::Gray8 {
+    type Accumulator = [f32;1];
+    fn new_accum() -> Self::Accumulator {[0.0;1]}
+}
+impl PixelFormat for Pixel::RGB24 {
+    type Accumulator = [f32;3];
+    fn new_accum() -> Self::Accumulator {[0.0;3]}
+}
+impl PixelFormat for Pixel::RGBA  {
+    type Accumulator = [f32;4];
+    fn new_accum() -> Self::Accumulator {[0.0;4]}
+}
 
 /// Resampler with preallocated buffers and coeffecients for the given
 /// dimensions and filter type.
@@ -165,7 +184,6 @@ pub struct Resizer<Pixel: PixelFormat> {
     pix_fmt: Pixel,
     // Temporary/preallocated stuff.
     tmp: Vec<f32>,
-    accum: Vec<f32>,
     coeffs_w: Vec<CoeffsLine>,
     coeffs_h: Vec<CoeffsLine>,
 }
@@ -194,7 +212,6 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             h2: h2,
             pix_fmt: p,
             tmp: vec![0.0;w1*h2*p.get_size()],
-            accum: vec![0.0;p.get_ncomponents()],
             // TODO(Kagami): Use same coeffs if w1 = h1 = w2 = h2?
             coeffs_w: Self::calc_coeffs(w1, w2, &filter),
             coeffs_h: Self::calc_coeffs(h1, h2, &filter),
@@ -245,30 +262,23 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         v as u8
     }
 
-    #[inline]
-    fn clear_accum(&mut self) {
-        for v in self.accum.iter_mut() {
-            *v = 0.0;
-        }
-    }
-
     // Resample W1xH1 to W1xH2.
     fn sample_rows(&mut self, src: &[u8]) {
         let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         for x1 in 0..self.w1 {
             for y2 in 0..self.h2 {
-                self.clear_accum();
+                let mut accum = Pixel::new_accum();
                 let ref line = self.coeffs_h[y2];
-                for (i, coeff) in line.data.iter().enumerate() {
+                for (i, &coeff) in line.data.iter().enumerate() {
                     let y0 = line.left + i;
                     let base = (y0 * self.w1 + x1) * ncomp;
-                    for n in 0..ncomp {
-                        let p = src[base + n] as f32;
-                        self.accum[n] += p * coeff;
+                    let src = &src[base .. base + ncomp];
+                    for (acc, &s) in accum.as_mut().iter_mut().zip(src) {
+                        *acc += (s as f32) * coeff;
                     }
                 }
-                for &v in &self.accum {
+                for &v in accum.as_ref().iter() {
                     self.tmp[offset] = v;
                     offset += 1;
                 }
@@ -282,17 +292,17 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         let mut offset = 0;
         for y2 in 0..self.h2 {
             for x2 in 0..self.w2 {
-                self.clear_accum();
+                let mut accum = Pixel::new_accum();
                 let ref line = self.coeffs_w[x2];
-                for (i, coeff) in line.data.iter().enumerate() {
+                for (i, &coeff) in line.data.iter().enumerate() {
                     let x0 = line.left + i;
                     let base = (x0 * self.h2 + y2) * ncomp;
-                    for n in 0..ncomp {
-                        let p = self.tmp[base + n];
-                        self.accum[n] += p * coeff;
+                    let tmp = &self.tmp[base .. base + ncomp];
+                    for (acc, &p) in accum.as_mut().iter_mut().zip(tmp) {
+                        *acc += p * coeff;
                     }
                 }
-                for &v in &self.accum {
+                for &v in accum.as_ref().iter() {
                     dst[offset] = Self::pack_u8(v);
                     offset += 1;
                 }
