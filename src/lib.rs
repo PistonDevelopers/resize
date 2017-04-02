@@ -245,21 +245,25 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     }
 
     #[inline]
-    fn clamp<N: PartialOrd>(v: N, min: N, max: N) -> N {
-        if v <= min {
-            min
-        } else if v >= max {
-            max
+    fn clamp<N: PartialOrd>(input: N, min: N, max: N) -> N {
+        if input > max {
+            return max;
+        } else if input < min {
+            return min;
         } else {
-            v
+            return input;
         }
     }
 
     #[inline]
-    fn pack_u8(mut v: f32) -> u8 {
-        v = v.round();
-        v = f32::min(f32::max(v, 0.0), 255.0);
-        v as u8
+    fn pack_u8(v: f32) -> u8 {
+        if v > 255.0 {
+            return 255;
+        } else if v < 0.0 {
+            return 0;
+        } else {
+            return v.round() as u8;
+        }
     }
 
     // Resample W1xH1 to W1xH2.
