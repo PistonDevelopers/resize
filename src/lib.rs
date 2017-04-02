@@ -126,42 +126,37 @@ fn lanczos(taps: f32, x: f32) -> f32 {
 
 /// Supported pixel formats.
 // TODO(Kagami): >8-bit formats.
-#[derive(Debug, Clone, Copy)]
-pub enum Pixel {
+#[allow(non_snake_case)]
+pub mod Pixel {
     /// Grayscale, 8-bit.
-    Gray8,
+    #[derive(Debug, Clone, Copy)]
+    pub struct Gray8;
     /// RGB, 8-bit per component.
-    RGB24,
+    #[derive(Debug, Clone, Copy)]
+    pub struct RGB24;
     /// RGBA, 8-bit per component.
-    RGBA,
+    #[derive(Debug, Clone, Copy)]
+    pub struct RGBA;
 }
 
-impl Pixel {
+/// See `Pixel`
+pub trait PixelFormat: Copy {
     /// Size of one pixel in that format in bytes.
-    #[inline]
-    pub fn get_size(&self) -> usize {
-        match *self {
-            Pixel::Gray8 => 1,
-            Pixel::RGB24 => 3,
-            Pixel::RGBA => 4,
-        }
+    fn get_size(&self) -> usize {
+        self.get_ncomponents()
     }
 
     /// Return number of components of that format.
-    #[inline]
-    pub fn get_ncomponents(&self) -> usize {
-        match *self {
-            Pixel::Gray8 => 1,
-            Pixel::RGB24 => 3,
-            Pixel::RGBA => 4,
-        }
-    }
+    fn get_ncomponents(&self) -> usize;
 }
+impl PixelFormat for Pixel::Gray8 { fn get_ncomponents(&self) -> usize {1}}
+impl PixelFormat for Pixel::RGB24 { fn get_ncomponents(&self) -> usize {3}}
+impl PixelFormat for Pixel::RGBA  { fn get_ncomponents(&self) -> usize {4}}
 
 /// Resampler with preallocated buffers and coeffecients for the given
 /// dimensions and filter type.
 #[derive(Debug)]
-pub struct Resizer {
+pub struct Resizer<Pixel: PixelFormat> {
     // Source/target dimensions.
     w1: usize,
     h1: usize,
@@ -181,9 +176,9 @@ struct CoeffsLine {
     data: Vec<f32>,
 }
 
-impl Resizer {
+impl<Pixel: PixelFormat> Resizer<Pixel> {
     /// Create a new resizer instance.
-    pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
+    pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Self {
         let filter = match t {
             Type::Point => Filter::new(Box::new(point_kernel), 0.0),
             Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
@@ -319,7 +314,7 @@ impl Resizer {
 }
 
 /// Create a new resizer instance. Alias for `Resizer::new`.
-pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer {
+pub fn new<Pixel: PixelFormat>(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer<Pixel> {
     Resizer::new(w1, h1, w2, h2, p, t)
 }
 
@@ -327,7 +322,7 @@ pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Res
 ///
 /// **NOTE:** If you need to resize to the same dimension multiple times,
 /// consider creating an resizer instance since it's faster.
-pub fn resize(
+pub fn resize<Pixel: PixelFormat>(
     w1: usize, h1: usize, w2: usize, h2: usize,
     p: Pixel, t: Type,
     src: &[u8], dst: &mut [u8],
