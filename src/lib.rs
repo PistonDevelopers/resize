@@ -25,6 +25,7 @@
 #![deny(missing_docs)]
 
 use std::f32;
+use std::mem;
 
 /// Resizing type to use.
 pub enum Type {
@@ -131,25 +132,39 @@ pub mod Pixel {
     /// Grayscale, 8-bit.
     #[derive(Debug, Clone, Copy)]
     pub struct Gray8;
+    /// Grayscale, 16-bit, native endian.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Gray16;
     /// RGB, 8-bit per component.
     #[derive(Debug, Clone, Copy)]
     pub struct RGB24;
+    /// RGB, 16-bit per component, native endian.
+    #[derive(Debug, Clone, Copy)]
+    pub struct RGB48;
     /// RGBA, 8-bit per component.
     #[derive(Debug, Clone, Copy)]
     pub struct RGBA;
+    /// RGBA, 16-bit per component, native endian.
+    #[derive(Debug, Clone, Copy)]
+    pub struct RGBA64;
 }
 
 /// See `Pixel`
 pub trait PixelFormat: Copy {
     /// Array to hold temporary values
     type Accumulator: AsRef<[f32]> + AsMut<[f32]>;
+    /// Type of a Subpixel of each pixel (8 or 16 bits)
+    type Subpixel: Copy + Into<f32>;
 
     /// New empty Accumulator
     fn new_accum() -> Self::Accumulator;
 
+    /// Convert float to integer value in range appropriate for this pixel format
+    fn into_subpixel(v: f32) -> Self::Subpixel;
+
     /// Size of one pixel in that format in bytes.
     fn get_size(&self) -> usize {
-        self.get_ncomponents()
+        self.get_ncomponents() * mem::size_of::<Self::Subpixel>()
     }
 
     /// Return number of components of that format.
@@ -161,15 +176,53 @@ pub trait PixelFormat: Copy {
 
 impl PixelFormat for Pixel::Gray8 {
     type Accumulator = [f32;1];
+    type Subpixel = u8;
     fn new_accum() -> Self::Accumulator {[0.0;1]}
+    fn into_subpixel(v: f32) -> Self::Subpixel {
+        Resizer::<Self>::pack_u8(v)
+    }
 }
+
+impl PixelFormat for Pixel::Gray16 {
+    type Accumulator = [f32;1];
+    type Subpixel = u16;
+    fn new_accum() -> Self::Accumulator {[0.0;1]}
+    fn into_subpixel(v: f32) -> Self::Subpixel {
+        Resizer::<Self>::pack_u16(v)
+    }
+}
+
 impl PixelFormat for Pixel::RGB24 {
     type Accumulator = [f32;3];
+    type Subpixel = u8;
     fn new_accum() -> Self::Accumulator {[0.0;3]}
+    fn into_subpixel(v: f32) -> Self::Subpixel {
+        Resizer::<Self>::pack_u8(v)
+    }
 }
 impl PixelFormat for Pixel::RGBA  {
     type Accumulator = [f32;4];
+    type Subpixel = u8;
     fn new_accum() -> Self::Accumulator {[0.0;4]}
+    fn into_subpixel(v: f32) -> Self::Subpixel {
+        Resizer::<Self>::pack_u8(v)
+    }
+}
+impl PixelFormat for Pixel::RGB48  {
+    type Accumulator = [f32;3];
+    type Subpixel = u16;
+    fn new_accum() -> Self::Accumulator {[0.0;3]}
+    fn into_subpixel(v: f32) -> Self::Subpixel {
+        Resizer::<Self>::pack_u16(v)
+    }
+}
+impl PixelFormat for Pixel::RGBA64  {
+    type Accumulator = [f32;4];
+    type Subpixel = u16;
+    fn new_accum() -> Self::Accumulator {[0.0;4]}
+    fn into_subpixel(v: f32) -> Self::Subpixel {
+        Resizer::<Self>::pack_u16(v)
+    }
 }
 
 /// Resampler with preallocated buffers and coeffecients for the given
@@ -211,7 +264,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             w2: w2,
             h2: h2,
             pix_fmt: p,
-            tmp: vec![0.0;w1*h2*p.get_size()],
+            tmp: vec![0.0; w1*h2*p.get_ncomponents()],
             // TODO(Kagami): Use same coeffs if w1 = h1 = w2 = h2?
             coeffs_w: Self::calc_coeffs(w1, w2, &filter),
             coeffs_h: Self::calc_coeffs(h1, h2, &filter),
@@ -266,8 +319,19 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         }
     }
 
+    #[inline]
+    fn pack_u16(v: f32) -> u16 {
+        if v > 65535.0 {
+            return 65535;
+        } else if v < 0.0 {
+            return 0;
+        } else {
+            return v.round() as u16;
+        }
+    }
+
     // Resample W1xH1 to W1xH2.
-    fn sample_rows(&mut self, src: &[u8]) {
+    fn sample_rows(&mut self, src: &[Pixel::Subpixel]) {
         let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         for x1 in 0..self.w1 {
@@ -279,7 +343,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
                     let base = (y0 * self.w1 + x1) * ncomp;
                     let src = &src[base .. base + ncomp];
                     for (acc, &s) in accum.as_mut().iter_mut().zip(src) {
-                        *acc += (s as f32) * coeff;
+                        *acc += s.into() * coeff;
                     }
                 }
                 for &v in accum.as_ref().iter() {
@@ -291,7 +355,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     }
 
     // Resample W1xH2 to W2xH2.
-    fn sample_cols(&mut self, dst: &mut [u8]) {
+    fn sample_cols(&mut self, dst: &mut [Pixel::Subpixel]) {
         let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         for y2 in 0..self.h2 {
@@ -307,7 +371,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
                     }
                 }
                 for &v in accum.as_ref().iter() {
-                    dst[offset] = Self::pack_u8(v);
+                    dst[offset] = Pixel::into_subpixel(v);
                     offset += 1;
                 }
             }
@@ -315,13 +379,13 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     }
 
     /// Resize `src` image data into `dst`.
-    pub fn resize(&mut self, src: &[u8], dst: &mut [u8]) {
+    pub fn resize(&mut self, src: &[Pixel::Subpixel], dst: &mut [Pixel::Subpixel]) {
         // TODO(Kagami):
         // * Multi-thread
         // * Bound checkings
         // * SIMD
-        assert_eq!(src.len(), self.w1 * self.h1 * self.pix_fmt.get_size());
-        assert_eq!(dst.len(), self.w2 * self.h2 * self.pix_fmt.get_size());
+        assert_eq!(src.len(), self.w1 * self.h1 * self.pix_fmt.get_ncomponents());
+        assert_eq!(dst.len(), self.w2 * self.h2 * self.pix_fmt.get_ncomponents());
         self.sample_rows(src);
         self.sample_cols(dst)
     }
@@ -339,7 +403,19 @@ pub fn new<Pixel: PixelFormat>(w1: usize, h1: usize, w2: usize, h2: usize, p: Pi
 pub fn resize<Pixel: PixelFormat>(
     w1: usize, h1: usize, w2: usize, h2: usize,
     p: Pixel, t: Type,
-    src: &[u8], dst: &mut [u8],
+    src: &[Pixel::Subpixel], dst: &mut [Pixel::Subpixel],
 ) {
     Resizer::new(w1, h1, w2, h2, p, t).resize(src, dst)
+}
+
+#[test]
+fn pixel_sizes() {
+    assert_eq!(Pixel::RGB24.get_ncomponents(), 3);
+    assert_eq!(Pixel::RGB24.get_size(), 3*1);
+    assert_eq!(Pixel::RGBA.get_size(), 4*1);
+
+    assert_eq!(Pixel::RGB48.get_ncomponents(), 3);
+    assert_eq!(Pixel::RGB48.get_size(), 3*2);
+    assert_eq!(Pixel::RGBA64.get_ncomponents(), 4);
+    assert_eq!(Pixel::RGBA64.get_size(), 4*2);
 }
