@@ -8,7 +8,7 @@ extern crate png;
 
 use std::fs::File;
 use std::path::PathBuf;
-use resize::Pixel::Gray8;
+use resize::Pixel::{Gray8, Gray16};
 use resize::Type::Triangle;
 
 fn get_image() -> (png::OutputInfo, Vec<u8>) {
@@ -40,6 +40,22 @@ fn precomputed_small(b: &mut Bencher) {
     let mut dst = vec![0;w2*h2];
 
     let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
+
+    b.iter(|| r.resize(&src, &mut dst));
+}
+
+#[bench]
+fn precomputed_small_16bit(b: &mut Bencher) {
+    let (info, src) = get_image();
+    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w2, h2) = (100,100);
+    let mut dst = vec![0u16;w2*h2];
+    let src: Vec<_> = src.into_iter().map(|px|{
+        let px = px as u16;
+        (px << 8) | px
+    }).collect();
+
+    let mut r = resize::new(w1, h1, w2, h2, Gray16, Triangle);
 
     b.iter(|| r.resize(&src, &mut dst));
 }
