@@ -249,8 +249,8 @@ struct CoeffsLine {
 
 impl<Pixel: PixelFormat> Resizer<Pixel> {
     /// Create a new resizer instance.
-    pub fn new(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Self {
-        let filter = match t {
+    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Pixel, filter_type: Type) -> Self {
+        let filter = match filter_type {
             Type::Point => Filter::new(Box::new(point_kernel), 0.0),
             Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
             Type::Catrom => Filter::new_cubic(0.0, 0.5),
@@ -259,15 +259,15 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             Type::Custom(f) => f,
         };
         Resizer {
-            w1: w1,
-            h1: h1,
-            w2: w2,
-            h2: h2,
-            pix_fmt: p,
-            tmp: vec![0.0; w1*h2*p.get_ncomponents()],
+            w1: source_width,
+            h1: source_heigth,
+            w2: dest_width,
+            h2: dest_height,
+            pix_fmt: pixel_format,
+            tmp: vec![0.0; source_width * dest_height * pixel_format.get_ncomponents()],
             // TODO(Kagami): Use same coeffs if w1 = h1 = w2 = h2?
-            coeffs_w: Self::calc_coeffs(w1, w2, &filter),
-            coeffs_h: Self::calc_coeffs(h1, h2, &filter),
+            coeffs_w: Self::calc_coeffs(source_width, dest_width, &filter),
+            coeffs_h: Self::calc_coeffs(source_heigth, dest_height, &filter),
         }
     }
 
@@ -392,8 +392,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
 }
 
 /// Create a new resizer instance. Alias for `Resizer::new`.
-pub fn new<Pixel: PixelFormat>(w1: usize, h1: usize, w2: usize, h2: usize, p: Pixel, t: Type) -> Resizer<Pixel> {
-    Resizer::new(w1, h1, w2, h2, p, t)
+pub fn new<Pixel: PixelFormat>(src_width: usize, src_height: usize, dest_width: usize, dest_height: usize, pixel_format: Pixel, filter_type: Type) -> Resizer<Pixel> {
+    Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)
 }
 
 /// Resize image data to the new dimension in a single step.
@@ -401,11 +401,11 @@ pub fn new<Pixel: PixelFormat>(w1: usize, h1: usize, w2: usize, h2: usize, p: Pi
 /// **NOTE:** If you need to resize to the same dimension multiple times,
 /// consider creating an resizer instance since it's faster.
 pub fn resize<Pixel: PixelFormat>(
-    w1: usize, h1: usize, w2: usize, h2: usize,
-    p: Pixel, t: Type,
+    src_width: usize, src_height: usize, dest_width: usize, dest_height: usize,
+    pixel_format: Pixel, filter_type: Type,
     src: &[Pixel::Subpixel], dst: &mut [Pixel::Subpixel],
 ) {
-    Resizer::new(w1, h1, w2, h2, p, t).resize(src, dst)
+    Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type).resize(src, dst)
 }
 
 #[test]
