@@ -283,7 +283,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             let left = Self::clamp(left, 0, s1 as isize - 1) as usize;
             let right = (x1 + filter_radius).floor() as isize;
             let right = Self::clamp(right, 0, s1 as isize - 1) as usize;
-            let mut data = Vec::with_capacity(right - left + 1);
+            let mut data = Vec::with_capacity(right + 1 - left);
             let mut sum = 0.0;
             for i in left..right+1 {
                 sum += (f.kernel)((i as f32 - x1) / filter_scale);
