@@ -331,7 +331,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     }
 
     // Resample W1xH1 to W1xH2.
-    fn sample_rows(&mut self, src: &[Pixel::Subpixel]) {
+    // Stride is a length of the source row (>= W1)
+    fn sample_rows(&mut self, src: &[Pixel::Subpixel], stride: usize) {
         let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         for x1 in 0..self.w1 {
@@ -340,7 +341,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
                 let ref line = self.coeffs_h[y2];
                 for (i, &coeff) in line.data.iter().enumerate() {
                     let y0 = line.left + i;
-                    let base = (y0 * self.w1 + x1) * ncomp;
+                    let base = (y0 * stride + x1) * ncomp;
                     let src = &src[base .. base + ncomp];
                     for (acc, &s) in accum.as_mut().iter_mut().zip(src) {
                         *acc += s.into() * coeff;
@@ -380,13 +381,20 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
 
     /// Resize `src` image data into `dst`.
     pub fn resize(&mut self, src: &[Pixel::Subpixel], dst: &mut [Pixel::Subpixel]) {
+        let stride = self.w1;
+        self.resize_stride(src, stride, dst)
+    }
+
+    /// Resize `src` image data into `dst`, skipping `stride` pixels each row
+    pub fn resize_stride(&mut self, src: &[Pixel::Subpixel], src_stride: usize, dst: &mut [Pixel::Subpixel]) {
         // TODO(Kagami):
         // * Multi-thread
         // * Bound checkings
         // * SIMD
-        assert_eq!(src.len(), self.w1 * self.h1 * self.pix_fmt.get_ncomponents());
+        assert!(self.w1 <= src_stride);
+        assert!(src.len() >= src_stride * self.h1 * self.pix_fmt.get_ncomponents());
         assert_eq!(dst.len(), self.w2 * self.h2 * self.pix_fmt.get_ncomponents());
-        self.sample_rows(src);
+        self.sample_rows(src, src_stride);
         self.sample_cols(dst)
     }
 }
@@ -418,4 +426,15 @@ fn pixel_sizes() {
     assert_eq!(Pixel::RGB48.get_size(), 3*2);
     assert_eq!(Pixel::RGBA64.get_ncomponents(), 4);
     assert_eq!(Pixel::RGBA64.get_size(), 4*2);
+}
+
+#[test]
+fn resize_stride() {
+    let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle);
+    let mut dst = vec![0; 12];
+    r.resize_stride(&[
+        65535,65535,1,2,
+        65535,65535,3,4,
+    ], 4, &mut dst);
+    assert_eq!(&dst, &[65535; 12]);
 }
