@@ -126,7 +126,7 @@ fn lanczos(taps: f32, x: f32) -> f32 {
 }
 
 /// Supported pixel formats.
-// TODO(Kagami): >8-bit formats.
+// TODO(Kagami): YUV planes?
 #[allow(non_snake_case)]
 pub mod Pixel {
     /// Grayscale, 8-bit.
@@ -151,15 +151,15 @@ pub mod Pixel {
 
 /// See `Pixel`
 pub trait PixelFormat: Copy {
-    /// Array to hold temporary values
+    /// Array to hold temporary values.
     type Accumulator: AsRef<[f32]> + AsMut<[f32]>;
-    /// Type of a Subpixel of each pixel (8 or 16 bits)
+    /// Type of a Subpixel of each pixel (8 or 16 bits).
     type Subpixel: Copy + Into<f32>;
 
-    /// New empty Accumulator
+    /// New empty Accumulator.
     fn new_accum() -> Self::Accumulator;
 
-    /// Convert float to integer value in range appropriate for this pixel format
+    /// Convert float to integer value in range appropriate for this pixel format.
     fn into_subpixel(v: f32) -> Self::Subpixel;
 
     /// Size of one pixel in that format in bytes.
@@ -385,7 +385,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         self.resize_stride(src, stride, dst)
     }
 
-    /// Resize `src` image data into `dst`, skipping `stride` pixels each row
+    /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
     pub fn resize_stride(&mut self, src: &[Pixel::Subpixel], src_stride: usize, dst: &mut [Pixel::Subpixel]) {
         // TODO(Kagami):
         // * Multi-thread
