@@ -11,4 +11,4 @@ repository = "https://github.com/PistonDevelopers/resize.git"
 documentation = "http://docs.piston.rs/resize/resize/"
 
 [dev-dependencies]
-png = "0.6"
+png = "0.14"
