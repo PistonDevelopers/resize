@@ -12,7 +12,7 @@ fn get_image() -> (png::OutputInfo, Vec<u8>) {
     let root: PathBuf = env!("CARGO_MANIFEST_DIR").into();
     let decoder = png::Decoder::new(File::open(root.join("examples/tiger.png")).unwrap());
     let (info, mut reader) = decoder.read_info().unwrap();
-    let mut src = vec![0;info.buffer_size()];
+    let mut src = vec![0; info.buffer_size()];
     reader.next_frame(&mut src).unwrap();
     (info, src)
 }
@@ -21,8 +21,8 @@ fn get_image() -> (png::OutputInfo, Vec<u8>) {
 fn precomputed_large(b: &mut Bencher) {
     let (info, src) = get_image();
     let (w1, h1) = (info.width as usize, info.height as usize);
-    let (w2, h2) = (1600,1200);
-    let mut dst = vec![0;w2*h2];
+    let (w2, h2) = (1600, 1200);
+    let mut dst = vec![0; w2 * h2];
 
     let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
 
@@ -33,8 +33,8 @@ fn precomputed_large(b: &mut Bencher) {
 fn precomputed_small(b: &mut Bencher) {
     let (info, src) = get_image();
     let (w1, h1) = (info.width as usize, info.height as usize);
-    let (w2, h2) = (100,100);
-    let mut dst = vec![0;w2*h2];
+    let (w2, h2) = (100, 100);
+    let mut dst = vec![0; w2 * h2];
 
     let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
 
@@ -61,8 +61,8 @@ fn precomputed_small_16bit(b: &mut Bencher) {
 fn recomputed_small(b: &mut Bencher) {
     let (info, src) = get_image();
     let (w1, h1) = (info.width as usize, info.height as usize);
-    let (w2, h2) = (100,100);
-    let mut dst = vec![0;w2*h2];
+    let (w2, h2) = (100, 100);
+    let mut dst = vec![0; w2 * h2];
 
     b.iter(|| resize::resize(w1, h1, w2, h2, Gray8, Triangle, &src, &mut dst));
 }

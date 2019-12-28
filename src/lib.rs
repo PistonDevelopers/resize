@@ -59,18 +59,21 @@ impl Filter {
     /// fn kernel(x: f32) -> f32 { f32::max(1.0 - x.abs(), 0.0) }
     /// let filter = Filter::new(Box::new(kernel), 1.0);
     /// ```
-    pub fn new(kernel: Box<dyn Fn(f32) -> f32>, support: f32) -> Filter {
-        Filter {kernel: kernel, support: support}
+    #[must_use]
+    pub fn new(kernel: Box<dyn Fn(f32) -> f32>, support: f32) -> Self {
+        Self { kernel, support }
     }
 
     /// Helper to create Cubic filter with custom B and C parameters.
-    pub fn new_cubic(b: f32, c: f32) -> Filter {
-        Filter::new(Box::new(move |x| cubic_bc(b, c, x)), 2.0)
+    #[must_use]
+    pub fn new_cubic(b: f32, c: f32) -> Self {
+        Self::new(Box::new(move |x| cubic_bc(b, c, x)), 2.0)
     }
 
     /// Helper to create Lanczos filter with custom radius.
-    pub fn new_lanczos(radius: f32) -> Filter {
-        Filter::new(Box::new(move |x| lanczos(radius, x)), radius)
+    #[must_use]
+    pub fn new_lanczos(radius: f32) -> Self {
+        Self::new(Box::new(move |x| lanczos(radius, x)), radius)
     }
 }
 
@@ -175,51 +178,75 @@ pub trait PixelFormat: Copy {
 }
 
 impl PixelFormat for Pixel::Gray8 {
-    type Accumulator = [f32;1];
+    type Accumulator = [f32; 1];
     type Subpixel = u8;
-    fn new_accum() -> Self::Accumulator {[0.0;1]}
+    #[must_use]
+    fn new_accum() -> Self::Accumulator {
+        [0.0; 1]
+    }
+    #[must_use]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u8(v)
     }
 }
 
 impl PixelFormat for Pixel::Gray16 {
-    type Accumulator = [f32;1];
+    type Accumulator = [f32; 1];
     type Subpixel = u16;
-    fn new_accum() -> Self::Accumulator {[0.0;1]}
+    #[must_use]
+    fn new_accum() -> Self::Accumulator {
+        [0.0; 1]
+    }
+    #[must_use]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u16(v)
     }
 }
 
 impl PixelFormat for Pixel::RGB24 {
-    type Accumulator = [f32;3];
+    type Accumulator = [f32; 3];
     type Subpixel = u8;
-    fn new_accum() -> Self::Accumulator {[0.0;3]}
+    #[must_use]
+    fn new_accum() -> Self::Accumulator {
+        [0.0; 3]
+    }
+    #[must_use]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u8(v)
     }
 }
-impl PixelFormat for Pixel::RGBA  {
-    type Accumulator = [f32;4];
+impl PixelFormat for Pixel::RGBA {
+    type Accumulator = [f32; 4];
     type Subpixel = u8;
-    fn new_accum() -> Self::Accumulator {[0.0;4]}
+    #[must_use]
+    fn new_accum() -> Self::Accumulator {
+        [0.0; 4]
+    }
+    #[must_use]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u8(v)
     }
 }
-impl PixelFormat for Pixel::RGB48  {
-    type Accumulator = [f32;3];
+impl PixelFormat for Pixel::RGB48 {
+    type Accumulator = [f32; 3];
     type Subpixel = u16;
-    fn new_accum() -> Self::Accumulator {[0.0;3]}
+    #[must_use]
+    fn new_accum() -> Self::Accumulator {
+        [0.0; 3]
+    }
+    #[must_use]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u16(v)
     }
 }
-impl PixelFormat for Pixel::RGBA64  {
-    type Accumulator = [f32;4];
+impl PixelFormat for Pixel::RGBA64 {
+    type Accumulator = [f32; 4];
     type Subpixel = u16;
-    fn new_accum() -> Self::Accumulator {[0.0;4]}
+    #[must_use]
+    fn new_accum() -> Self::Accumulator {
+        [0.0; 4]
+    }
+    #[must_use]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u16(v)
     }
@@ -258,7 +285,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             Type::Lanczos3 => Filter::new_lanczos(3.0),
             Type::Custom(f) => f,
         };
-        Resizer {
+        Self {
             w1: source_width,
             h1: source_heigth,
             w2: dest_width,
@@ -285,14 +312,14 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             let right = Self::clamp(right, 0, s1 as isize - 1) as usize;
             let mut data = Vec::with_capacity(right + 1 - left);
             let mut sum = 0.0;
-            for i in left..right+1 {
+            for i in left..=right {
                 sum += (f.kernel)((i as f32 - x1) / filter_scale);
             }
-            for i in left..right+1 {
+            for i in left..=right {
                 let v = (f.kernel)((i as f32 - x1) / filter_scale);
                 data.push(v / sum);
             }
-            coeffs.push(CoeffsLine {left: left, data: data});
+            coeffs.push(CoeffsLine { left, data });
         }
         coeffs
     }
@@ -300,33 +327,33 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     #[inline]
     fn clamp<N: PartialOrd>(input: N, min: N, max: N) -> N {
         if input > max {
-            return max;
+            max
         } else if input < min {
-            return min;
+            min
         } else {
-            return input;
+            input
         }
     }
 
     #[inline]
     fn pack_u8(v: f32) -> u8 {
         if v > 255.0 {
-            return 255;
+            255
         } else if v < 0.0 {
-            return 0;
+            0
         } else {
-            return v.round() as u8;
+            v.round() as u8
         }
     }
 
     #[inline]
     fn pack_u16(v: f32) -> u16 {
         if v > 65535.0 {
-            return 65535;
+            65535
         } else if v < 0.0 {
-            return 0;
+            0
         } else {
-            return v.round() as u16;
+            v.round() as u16
         }
     }
 
@@ -338,11 +365,11 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         for x1 in 0..self.w1 {
             for y2 in 0..self.h2 {
                 let mut accum = Pixel::new_accum();
-                let ref line = self.coeffs_h[y2];
+                let line = &self.coeffs_h[y2];
                 for (i, &coeff) in line.data.iter().enumerate() {
                     let y0 = line.left + i;
                     let base = (y0 * stride + x1) * ncomp;
-                    let src = &src[base .. base + ncomp];
+                    let src = &src[base..base + ncomp];
                     for (acc, &s) in accum.as_mut().iter_mut().zip(src) {
                         *acc += s.into() * coeff;
                     }
@@ -362,11 +389,11 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         for y2 in 0..self.h2 {
             for x2 in 0..self.w2 {
                 let mut accum = Pixel::new_accum();
-                let ref line = self.coeffs_w[x2];
+                let line = &self.coeffs_w[x2];
                 for (i, &coeff) in line.data.iter().enumerate() {
                     let x0 = line.left + i;
                     let base = (x0 * self.h2 + y2) * ncomp;
-                    let tmp = &self.tmp[base .. base + ncomp];
+                    let tmp = &self.tmp[base..base + ncomp];
                     for (acc, &p) in accum.as_mut().iter_mut().zip(tmp) {
                         *acc += p * coeff;
                     }
@@ -419,13 +446,13 @@ pub fn resize<Pixel: PixelFormat>(
 #[test]
 fn pixel_sizes() {
     assert_eq!(Pixel::RGB24.get_ncomponents(), 3);
-    assert_eq!(Pixel::RGB24.get_size(), 3*1);
-    assert_eq!(Pixel::RGBA.get_size(), 4*1);
+    assert_eq!(Pixel::RGB24.get_size(), 3 * 1);
+    assert_eq!(Pixel::RGBA.get_size(), 4 * 1);
 
     assert_eq!(Pixel::RGB48.get_ncomponents(), 3);
-    assert_eq!(Pixel::RGB48.get_size(), 3*2);
+    assert_eq!(Pixel::RGB48.get_size(), 3 * 2);
     assert_eq!(Pixel::RGBA64.get_ncomponents(), 4);
-    assert_eq!(Pixel::RGBA64.get_size(), 4*2);
+    assert_eq!(Pixel::RGBA64.get_size(), 4 * 2);
 }
 
 #[test]
