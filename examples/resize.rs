@@ -1,10 +1,7 @@
-extern crate resize;
-extern crate png;
-
-use std::env;
-use std::fs::File;
 use resize::Pixel::Gray8;
 use resize::Type::Triangle;
+use std::env;
+use std::fs::File;
 
 fn main() {
     let args: Vec<_> = env::args().collect();

@@ -3,13 +3,10 @@
 extern crate test;
 use test::Bencher;
 
-extern crate resize;
-extern crate png;
-
+use resize::Pixel::{Gray16, Gray8};
+use resize::Type::Triangle;
 use std::fs::File;
 use std::path::PathBuf;
-use resize::Pixel::{Gray8, Gray16};
-use resize::Type::Triangle;
 
 fn get_image() -> (png::OutputInfo, Vec<u8>) {
     let root: PathBuf = env!("CARGO_MANIFEST_DIR").into();

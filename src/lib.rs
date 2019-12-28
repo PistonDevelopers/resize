@@ -45,7 +45,7 @@ pub enum Type {
 
 /// Resampling filter.
 pub struct Filter {
-    kernel: Box<Fn(f32) -> f32>,
+    kernel: Box<dyn Fn(f32) -> f32>,
     support: f32,
 }
 
@@ -59,7 +59,7 @@ impl Filter {
     /// fn kernel(x: f32) -> f32 { f32::max(1.0 - x.abs(), 0.0) }
     /// let filter = Filter::new(Box::new(kernel), 1.0);
     /// ```
-    pub fn new(kernel: Box<Fn(f32) -> f32>, support: f32) -> Filter {
+    pub fn new(kernel: Box<dyn Fn(f32) -> f32>, support: f32) -> Filter {
         Filter {kernel: kernel, support: support}
     }
 
