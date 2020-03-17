@@ -153,11 +153,11 @@ pub mod Pixel {
 }
 
 /// See `Pixel`
-pub trait PixelFormat: Copy {
+pub trait PixelFormat {
     /// Array to hold temporary values.
     type Accumulator: AsRef<[f32]> + AsMut<[f32]>;
     /// Type of a Subpixel of each pixel (8 or 16 bits).
-    type Subpixel: Copy + Into<f32>;
+    type Subpixel: Copy;
 
     /// New empty Accumulator.
     fn new_accum() -> Self::Accumulator;
@@ -165,7 +165,11 @@ pub trait PixelFormat: Copy {
     /// Convert float to integer value in range appropriate for this pixel format.
     fn into_subpixel(v: f32) -> Self::Subpixel;
 
+    /// Convert pixel component to float
+    fn from_subpixel(v: &Self::Subpixel) -> f32;
+
     /// Size of one pixel in that format in bytes.
+    #[inline(always)]
     fn get_size(&self) -> usize {
         self.get_ncomponents() * mem::size_of::<Self::Subpixel>()
     }
@@ -180,75 +184,129 @@ pub trait PixelFormat: Copy {
 impl PixelFormat for Pixel::Gray8 {
     type Accumulator = [f32; 1];
     type Subpixel = u8;
+
     #[must_use]
+    #[inline(always)]
     fn new_accum() -> Self::Accumulator {
         [0.0; 1]
     }
+
     #[must_use]
+    #[inline(always)]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u8(v)
+    }
+
+    #[inline(always)]
+    fn from_subpixel(px: &Self::Subpixel) -> f32 {
+        *px as f32
     }
 }
 
 impl PixelFormat for Pixel::Gray16 {
     type Accumulator = [f32; 1];
     type Subpixel = u16;
+
     #[must_use]
+    #[inline(always)]
     fn new_accum() -> Self::Accumulator {
         [0.0; 1]
     }
+
     #[must_use]
+    #[inline(always)]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u16(v)
+    }
+
+    #[inline(always)]
+    fn from_subpixel(px: &Self::Subpixel) -> f32 {
+        *px as f32
     }
 }
 
 impl PixelFormat for Pixel::RGB24 {
     type Accumulator = [f32; 3];
     type Subpixel = u8;
+
     #[must_use]
+    #[inline(always)]
     fn new_accum() -> Self::Accumulator {
         [0.0; 3]
     }
+
     #[must_use]
+    #[inline(always)]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u8(v)
+    }
+
+    #[inline(always)]
+    fn from_subpixel(px: &Self::Subpixel) -> f32 {
+        *px as f32
     }
 }
 impl PixelFormat for Pixel::RGBA {
     type Accumulator = [f32; 4];
     type Subpixel = u8;
+
     #[must_use]
+    #[inline(always)]
     fn new_accum() -> Self::Accumulator {
         [0.0; 4]
     }
+
     #[must_use]
+    #[inline(always)]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u8(v)
+    }
+
+    #[inline(always)]
+    fn from_subpixel(px: &Self::Subpixel) -> f32 {
+        *px as f32
     }
 }
 impl PixelFormat for Pixel::RGB48 {
     type Accumulator = [f32; 3];
     type Subpixel = u16;
+
     #[must_use]
+    #[inline(always)]
     fn new_accum() -> Self::Accumulator {
         [0.0; 3]
     }
+
     #[must_use]
+    #[inline(always)]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u16(v)
+    }
+
+    #[inline(always)]
+    fn from_subpixel(px: &Self::Subpixel) -> f32 {
+        *px as f32
     }
 }
 impl PixelFormat for Pixel::RGBA64 {
     type Accumulator = [f32; 4];
     type Subpixel = u16;
+
     #[must_use]
+    #[inline(always)]
     fn new_accum() -> Self::Accumulator {
         [0.0; 4]
     }
+
     #[must_use]
+    #[inline(always)]
     fn into_subpixel(v: f32) -> Self::Subpixel {
         Resizer::<Self>::pack_u16(v)
+    }
+
+    #[inline(always)]
+    fn from_subpixel(px: &Self::Subpixel) -> f32 {
+        *px as f32
     }
 }
 
@@ -371,8 +429,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
                     let y0 = line.left + i;
                     let base = (y0 * stride + x1) * ncomp;
                     let src = &src[base..base + ncomp];
-                    for (acc, &s) in accum.as_mut().iter_mut().zip(src) {
-                        *acc += s.into() * coeff;
+                    for (acc, s) in accum.as_mut().iter_mut().zip(src) {
+                        *acc += Pixel::from_subpixel(s) * coeff;
                     }
                 }
                 for &v in accum.as_ref().iter() {
