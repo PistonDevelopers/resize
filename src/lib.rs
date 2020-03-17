@@ -290,8 +290,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             h1: source_heigth,
             w2: dest_width,
             h2: dest_height,
+            tmp: Vec::with_capacity(source_width * dest_height * pixel_format.get_ncomponents()),
             pix_fmt: pixel_format,
-            tmp: vec![0.0; source_width * dest_height * pixel_format.get_ncomponents()],
             // TODO(Kagami): Use same coeffs if w1 = h1 = w2 = h2?
             coeffs_w: Self::calc_coeffs(source_width, dest_width, &filter),
             coeffs_h: Self::calc_coeffs(source_heigth, dest_height, &filter),
@@ -361,7 +361,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     // Stride is a length of the source row (>= W1)
     fn sample_rows(&mut self, src: &[Pixel::Subpixel], stride: usize) {
         let ncomp = self.pix_fmt.get_ncomponents();
-        let mut offset = 0;
+        self.tmp.clear();
+        assert!(self.tmp.capacity() <= self.w1 * self.h2 * ncomp); // no reallocations
         for x1 in 0..self.w1 {
             for y2 in 0..self.h2 {
                 let mut accum = Pixel::new_accum();
@@ -375,8 +376,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
                     }
                 }
                 for &v in accum.as_ref().iter() {
-                    self.tmp[offset] = v;
-                    offset += 1;
+                    self.tmp.push(v);
                 }
             }
         }
@@ -386,6 +386,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     fn sample_cols(&mut self, dst: &mut [Pixel::Subpixel]) {
         let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
+        // Assert that dst is large enough
+        let dst = &mut dst[0..self.h2 * self.w2 * ncomp];
         for y2 in 0..self.h2 {
             for x2 in 0..self.w2 {
                 let mut accum = Pixel::new_accum();
