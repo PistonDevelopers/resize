@@ -326,7 +326,7 @@ pub struct Resizer<Pixel: PixelFormat> {
     coeffs_h: Vec<CoeffsLine>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CoeffsLine {
     left: usize,
     data: Vec<f32>,
@@ -343,6 +343,12 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             Type::Lanczos3 => Filter::new_lanczos(3.0),
             Type::Custom(f) => f,
         };
+        let coeffs_w = Self::calc_coeffs(source_width, dest_width, &filter);
+        let coeffs_h = if source_heigth == source_width && dest_height == dest_width {
+            coeffs_w.clone()
+        } else {
+            Self::calc_coeffs(source_heigth, dest_height, &filter)
+        };
         Self {
             w1: source_width,
             h1: source_heigth,
@@ -350,36 +356,29 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             h2: dest_height,
             tmp: Vec::with_capacity(source_width * dest_height * pixel_format.get_ncomponents()),
             pix_fmt: pixel_format,
-            // TODO(Kagami): Use same coeffs if w1 = h1 = w2 = h2?
-            coeffs_w: Self::calc_coeffs(source_width, dest_width, &filter),
-            coeffs_h: Self::calc_coeffs(source_heigth, dest_height, &filter),
+            coeffs_w,
+            coeffs_h,
         }
     }
 
     fn calc_coeffs(s1: usize, s2: usize, f: &Filter) -> Vec<CoeffsLine> {
         let ratio = s1 as f32 / s2 as f32;
         // Scale the filter when downsampling.
-        let filter_scale = if ratio > 1.0 { ratio } else { 1.0 };
+        let filter_scale = ratio.max(1.);
         let filter_radius = (f.support * filter_scale).ceil();
-        let mut coeffs = Vec::with_capacity(s2);
-        for x2 in 0..s2 {
+        (0..s2).map(|x2| {
             let x1 = (x2 as f32 + 0.5) * ratio - 0.5;
             let left = (x1 - filter_radius).ceil() as isize;
             let left = Self::clamp(left, 0, s1 as isize - 1) as usize;
             let right = (x1 + filter_radius).floor() as isize;
             let right = Self::clamp(right, 0, s1 as isize - 1) as usize;
-            let mut data = Vec::with_capacity(right + 1 - left);
-            let mut sum = 0.0;
-            for i in left..=right {
-                sum += (f.kernel)((i as f32 - x1) / filter_scale);
-            }
-            for i in left..=right {
+            let sum: f32 = (left..=right).map(|i| (f.kernel)((i as f32 - x1) / filter_scale)).sum();
+            let data = (left..=right).map(|i| {
                 let v = (f.kernel)((i as f32 - x1) / filter_scale);
-                data.push(v / sum);
-            }
-            coeffs.push(CoeffsLine { left, data });
-        }
-        coeffs
+                v / sum
+            }).collect();
+            CoeffsLine { left, data }
+        }).collect()
     }
 
     #[inline]
