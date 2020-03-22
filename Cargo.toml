@@ -1,15 +1,15 @@
 [package]
 name = "resize"
-version = "0.3.1"
-authors = ["Kagami Hiiragi <kagami@genshiken.org>"]
-description = "Simple resampling library in pure Rust."
+version = "0.4.0"
+authors = ["Kagami Hiiragi <kagami@genshiken.org>", "Kornel <kornel@geekhood.net>"]
+description = "Simple image resampling library in pure Rust."
 keywords = ["image", "resize", "resample", "graphics"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/PistonDevelopers/resize"
 repository = "https://github.com/PistonDevelopers/resize.git"
-documentation = "http://docs.piston.rs/resize/resize/"
+documentation = "https://docs.rs/resize"
 edition = "2018"
 
 [dev-dependencies]
-png = "0.15"
+png = "0.16.1"
