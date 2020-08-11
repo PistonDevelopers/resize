@@ -159,13 +159,13 @@ pub mod Pixel {
 /// Resampler with preallocated buffers and coeffecients for the given
 /// dimensions and filter type.
 #[derive(Debug)]
-pub struct Resizer<Pixel: PixelFormat> {
+pub struct Resizer<Format: PixelFormat> {
     // Source/target dimensions.
     w1: usize,
     h1: usize,
     w2: usize,
     h2: usize,
-    pix_fmt: Pixel,
+    pix_fmt: Format,
     // Temporary/preallocated stuff.
     tmp: Vec<f32>,
     coeffs_w: Vec<CoeffsLine>,
@@ -178,9 +178,9 @@ struct CoeffsLine {
     coeffs: Arc<[f32]>,
 }
 
-impl<Pixel: PixelFormat> Resizer<Pixel> {
+impl<Format: PixelFormat> Resizer<Format> {
     /// Create a new resizer instance.
-    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Pixel, filter_type: Type) -> Self {
+    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Self {
         let filter = match filter_type {
             Type::Point => Filter::new(Box::new(point_kernel), 0.0),
             Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
@@ -248,7 +248,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
 
     // Resample W1xH1 to W1xH2.
     // Stride is a length of the source row (>= W1)
-    fn sample_rows(&mut self, src: &[Pixel::Subpixel], stride: usize) {
+    fn sample_rows(&mut self, src: &[Format::Subpixel], stride: usize) {
         let ncomp = self.pix_fmt.get_ncomponents();
         self.tmp.clear();
         assert!(self.tmp.capacity() <= self.w1 * self.h2 * ncomp); // no reallocations
@@ -256,14 +256,14 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             let h2 = self.h2;
             let coeffs_h = &self.coeffs_h[0..h2];
             for y2 in 0..h2 {
-                let mut accum = Pixel::new_accum();
+                let mut accum = Format::new_accum();
                 let line = &coeffs_h[y2];
                 let src = &src[(line.start * stride + x1) * ncomp..];
                 for (i, coeff) in line.coeffs.iter().copied().enumerate() {
                     let base = (i * stride) * ncomp;
                     let src = &src[base..base + ncomp];
                     for (acc, s) in accum.as_mut().iter_mut().zip(src) {
-                        *acc += Pixel::from_subpixel(s) * coeff;
+                        *acc += Format::from_subpixel(s) * coeff;
                     }
                 }
                 for &v in accum.as_ref().iter() {
@@ -274,7 +274,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     }
 
     // Resample W1xH2 to W2xH2.
-    fn sample_cols(&mut self, dst: &mut [Pixel::Subpixel]) {
+    fn sample_cols(&mut self, dst: &mut [Format::Subpixel]) {
         let ncomp = self.pix_fmt.get_ncomponents();
         let mut offset = 0;
         // Assert that dst is large enough
@@ -283,7 +283,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             let w2 = self.w2;
             let coeffs_w = &self.coeffs_w[0..w2];
             for x2 in 0..w2 {
-                let mut accum = Pixel::new_accum();
+                let mut accum = Format::new_accum();
                 let line = &coeffs_w[x2];
                 for (i, coeff) in line.coeffs.iter().copied().enumerate() {
                     let x0 = line.start + i;
@@ -294,7 +294,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
                     }
                 }
                 for &v in accum.as_ref().iter() {
-                    dst[offset] = Pixel::into_subpixel(v);
+                    dst[offset] = Format::into_subpixel(v);
                     offset += 1;
                 }
             }
@@ -302,13 +302,13 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
     }
 
     /// Resize `src` image data into `dst`.
-    pub fn resize(&mut self, src: &[Pixel::Subpixel], dst: &mut [Pixel::Subpixel]) {
+    pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) {
         let stride = self.w1;
         self.resize_stride(src, stride, dst)
     }
 
     /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
-    pub fn resize_stride(&mut self, src: &[Pixel::Subpixel], src_stride: usize, dst: &mut [Pixel::Subpixel]) {
+    pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) {
         // TODO(Kagami):
         // * Multi-thread
         // * Bound checkings
@@ -322,7 +322,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
 }
 
 /// Create a new resizer instance. Alias for `Resizer::new`.
-pub fn new<Pixel: PixelFormat>(src_width: usize, src_height: usize, dest_width: usize, dest_height: usize, pixel_format: Pixel, filter_type: Type) -> Resizer<Pixel> {
+pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Resizer<Format> {
     Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)
 }
 
@@ -330,10 +330,10 @@ pub fn new<Pixel: PixelFormat>(src_width: usize, src_height: usize, dest_width: 
 ///
 /// **NOTE:** If you need to resize to the same dimension multiple times,
 /// consider creating an resizer instance since it's faster.
-pub fn resize<Pixel: PixelFormat>(
+pub fn resize<Format: PixelFormat>(
     src_width: usize, src_height: usize, dest_width: usize, dest_height: usize,
-    pixel_format: Pixel, filter_type: Type,
-    src: &[Pixel::Subpixel], dst: &mut [Pixel::Subpixel],
+    pixel_format: Format, filter_type: Type,
+    src: &[Format::Subpixel], dst: &mut [Format::Subpixel],
 ) {
     Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type).resize(src, dst)
 }
