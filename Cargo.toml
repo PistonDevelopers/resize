@@ -15,3 +15,6 @@ include = ["Cargo.toml", "README.md", "LICENSE", "src/*.rs"]
 
 [dev-dependencies]
 png = "0.16.7"
+
+[dependencies]
+rgb = "0.8.22"
