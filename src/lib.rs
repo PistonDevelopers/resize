@@ -421,12 +421,14 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         self.tmp.clear();
         assert!(self.tmp.capacity() <= self.w1 * self.h2 * ncomp); // no reallocations
         for x1 in 0..self.w1 {
-            for y2 in 0..self.h2 {
+            let h2 = self.h2;
+            let coeffs_h = &self.coeffs_h[0..h2];
+            for y2 in 0..h2 {
                 let mut accum = Pixel::new_accum();
-                let line = &self.coeffs_h[y2];
-                for (i, &coeff) in line.data.iter().enumerate() {
-                    let y0 = line.left + i;
-                    let base = (y0 * stride + x1) * ncomp;
+                let line = &coeffs_h[y2];
+                let src = &src[(line.left * stride + x1) * ncomp..];
+                for (i, coeff) in line.data.iter().copied().enumerate() {
+                    let base = (i * stride) * ncomp;
                     let src = &src[base..base + ncomp];
                     for (acc, s) in accum.as_mut().iter_mut().zip(src) {
                         *acc += Pixel::from_subpixel(s) * coeff;
@@ -446,10 +448,12 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         // Assert that dst is large enough
         let dst = &mut dst[0..self.h2 * self.w2 * ncomp];
         for y2 in 0..self.h2 {
-            for x2 in 0..self.w2 {
+            let w2 = self.w2;
+            let coeffs_w = &self.coeffs_w[0..w2];
+            for x2 in 0..w2 {
                 let mut accum = Pixel::new_accum();
-                let line = &self.coeffs_w[x2];
-                for (i, &coeff) in line.data.iter().enumerate() {
+                let line = &coeffs_w[x2];
+                for (i, coeff) in line.data.iter().copied().enumerate() {
                     let x0 = line.left + i;
                     let base = (x0 * self.h2 + y2) * ncomp;
                     let tmp = &self.tmp[base..base + ncomp];
