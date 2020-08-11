@@ -329,7 +329,7 @@ pub struct Resizer<Pixel: PixelFormat> {
 #[derive(Debug, Clone)]
 struct CoeffsLine {
     left: usize,
-    data: Vec<f32>,
+    data: Box<[f32]>,
 }
 
 impl<Pixel: PixelFormat> Resizer<Pixel> {
