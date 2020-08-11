@@ -11,7 +11,6 @@ Simple resampling library in pure Rust.
 ## Usage
 
 ```rust
-extern crate resize;
 use resize::Pixel::RGB24;
 use resize::Type::Lanczos3;
 
