@@ -328,8 +328,8 @@ pub struct Resizer<Pixel: PixelFormat> {
 
 #[derive(Debug, Clone)]
 struct CoeffsLine {
-    left: usize,
-    data: Box<[f32]>,
+    start: usize,
+    coeffs: Box<[f32]>,
 }
 
 impl<Pixel: PixelFormat> Resizer<Pixel> {
@@ -368,16 +368,16 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         let filter_radius = (f.support * filter_scale).ceil();
         (0..s2).map(|x2| {
             let x1 = (x2 as f32 + 0.5) * ratio - 0.5;
-            let left = (x1 - filter_radius).ceil() as isize;
-            let left = Self::clamp(left, 0, s1 as isize - 1) as usize;
-            let right = (x1 + filter_radius).floor() as isize;
-            let right = Self::clamp(right, 0, s1 as isize - 1) as usize;
-            let sum: f32 = (left..=right).map(|i| (f.kernel)((i as f32 - x1) / filter_scale)).sum();
-            let data = (left..=right).map(|i| {
+            let start = (x1 - filter_radius).ceil() as isize;
+            let start = Self::clamp(start, 0, s1 as isize - 1) as usize;
+            let end = (x1 + filter_radius).floor() as isize;
+            let end = Self::clamp(end, 0, s1 as isize - 1) as usize;
+            let sum: f32 = (start..=end).map(|i| (f.kernel)((i as f32 - x1) / filter_scale)).sum();
+            let coeffs = (start..=end).map(|i| {
                 let v = (f.kernel)((i as f32 - x1) / filter_scale);
                 v / sum
             }).collect();
-            CoeffsLine { left, data }
+            CoeffsLine { start, coeffs }
         }).collect()
     }
 
@@ -426,8 +426,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             for y2 in 0..h2 {
                 let mut accum = Pixel::new_accum();
                 let line = &coeffs_h[y2];
-                let src = &src[(line.left * stride + x1) * ncomp..];
-                for (i, coeff) in line.data.iter().copied().enumerate() {
+                let src = &src[(line.start * stride + x1) * ncomp..];
+                for (i, coeff) in line.coeffs.iter().copied().enumerate() {
                     let base = (i * stride) * ncomp;
                     let src = &src[base..base + ncomp];
                     for (acc, s) in accum.as_mut().iter_mut().zip(src) {
@@ -453,8 +453,8 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             for x2 in 0..w2 {
                 let mut accum = Pixel::new_accum();
                 let line = &coeffs_w[x2];
-                for (i, coeff) in line.data.iter().copied().enumerate() {
-                    let x0 = line.left + i;
+                for (i, coeff) in line.coeffs.iter().copied().enumerate() {
+                    let x0 = line.start + i;
                     let base = (x0 * self.h2 + y2) * ncomp;
                     let tmp = &self.tmp[base..base + ncomp];
                     for (acc, &p) in accum.as_mut().iter_mut().zip(tmp) {
