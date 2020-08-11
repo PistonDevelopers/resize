@@ -24,6 +24,8 @@
 // * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
 #![deny(missing_docs)]
 
+use std::sync::Arc;
+use std::collections::HashMap;
 use std::f32;
 use std::mem;
 
@@ -329,7 +331,7 @@ pub struct Resizer<Pixel: PixelFormat> {
 #[derive(Debug, Clone)]
 struct CoeffsLine {
     start: usize,
-    coeffs: Box<[f32]>,
+    coeffs: Arc<[f32]>,
 }
 
 impl<Pixel: PixelFormat> Resizer<Pixel> {
@@ -343,11 +345,16 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             Type::Lanczos3 => Filter::new_lanczos(3.0),
             Type::Custom(f) => f,
         };
-        let coeffs_w = Self::calc_coeffs(source_width, dest_width, &filter);
+        // filters very often create repeating patterns,
+        // so overall memory used by them can be reduced
+        // which should save some cache space
+        let mut recycled_coeffs = HashMap::new();
+
+        let coeffs_w = Self::calc_coeffs(source_width, dest_width, &filter, &mut recycled_coeffs);
         let coeffs_h = if source_heigth == source_width && dest_height == dest_width {
             coeffs_w.clone()
         } else {
-            Self::calc_coeffs(source_heigth, dest_height, &filter)
+            Self::calc_coeffs(source_heigth, dest_height, &filter, &mut recycled_coeffs)
         };
         Self {
             w1: source_width,
@@ -361,7 +368,7 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
         }
     }
 
-    fn calc_coeffs(s1: usize, s2: usize, f: &Filter) -> Vec<CoeffsLine> {
+    fn calc_coeffs(s1: usize, s2: usize, f: &Filter, recycled_coeffs: &mut HashMap<(usize, u64), Arc<[f32]>>) -> Vec<CoeffsLine> {
         let ratio = s1 as f32 / s2 as f32;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
@@ -373,10 +380,13 @@ impl<Pixel: PixelFormat> Resizer<Pixel> {
             let end = (x1 + filter_radius).floor() as isize;
             let end = Self::clamp(end, 0, s1 as isize - 1) as usize;
             let sum: f32 = (start..=end).map(|i| (f.kernel)((i as f32 - x1) / filter_scale)).sum();
-            let coeffs = (start..=end).map(|i| {
-                let v = (f.kernel)((i as f32 - x1) / filter_scale);
-                v / sum
-            }).collect();
+            let key = (end - start, ((x1 - start as f32) * 100_000.) as u64);
+            let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
+                (start..=end).map(|i| {
+                    let v = (f.kernel)((i as f32 - x1) / filter_scale);
+                    v / sum
+                }).collect::<Arc<[_]>>()
+            }).clone();
             CoeffsLine { start, coeffs }
         }).collect()
     }
