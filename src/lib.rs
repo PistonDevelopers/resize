@@ -330,6 +330,8 @@ pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width:
 ///
 /// **NOTE:** If you need to resize to the same dimension multiple times,
 /// consider creating an resizer instance since it's faster.
+#[deprecated(note="Use resize::new().resize()")]
+#[allow(deprecated)]
 pub fn resize<Format: PixelFormat>(
     src_width: usize, src_height: usize, dest_width: usize, dest_height: usize,
     pixel_format: Format, filter_type: Type,
