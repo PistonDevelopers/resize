@@ -22,7 +22,7 @@ fn write_png(path: &Path, w2: usize, h2: usize, pixels: &[u8]) {
 fn img_diff(a: &[u8], b: &[u8]) -> f64 {
     assert_eq!(a.len(), b.len());
     let sum = a.iter().cloned().zip(b.iter().cloned()).map(|(a,b)| {
-        ((a as i32 - b as i32) as u32).pow(2)
+        (a as i32 - b as i32).pow(2) as u32
     }).sum::<u32>();
     sum as f64 / a.len() as f64
 }
@@ -31,10 +31,10 @@ fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
     let (_, _, expected) = load_png(&fs::read(&expected_filename).expect(expected_filename));
 
     let diff = img_diff(&img, &expected);
-    if diff > 0.00001 {
+    if diff > 0.0004 {
         let bad_file = Path::new(expected_filename).with_extension("failed-test.png");
         write_png(&bad_file, w2, h2, img);
-        panic!("Test failed: {} differs by {}; see {}", expected_filename, diff, bad_file.display());
+        panic!("Test failed: {} differs by {}; see {} ", expected_filename, diff, bad_file.display());
     }
 }
 
