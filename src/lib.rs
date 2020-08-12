@@ -262,45 +262,43 @@ impl<Format: PixelFormat> Resizer<Format> {
         }
     }
 
-    // Resample W1xH1 to W1xH2.
-    // Stride is a length of the source row (>= W1)
-    fn sample_rows(&mut self, src: &[Format::InputPixel], stride: usize) {
-        for x1 in 0..self.w1 {
-            let h2 = self.h2;
-            let coeffs_h = &self.coeffs_h[0..h2];
-            for y2 in 0..h2 {
-                let mut accum = Format::new();
-                let line = &coeffs_h[y2];
-                let src = &src[(line.start * stride + x1)..];
-                for (i, coeff) in line.coeffs.iter().copied().enumerate() {
-                    self.pix_fmt.add(&mut accum, src[i * stride], coeff);
-                }
-                self.tmp.push(accum);
-            }
-        }
-    }
+    /// Stride is a length of the source row (>= W1)
+    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: usize, mut dst: &mut [Format::OutputPixel]) {
+        self.tmp.clear();
+        self.tmp.reserve(self.w2 * self.h1);
 
-    // Resample W1xH2 to W2xH2.
-    fn sample_cols(&mut self, dst: &mut [Format::OutputPixel]) {
-        let mut offset = 0;
-        // Assert that dst is large enough
-        let dst = &mut dst[0..self.h2 * self.w2];
-        for y2 in 0..self.h2 {
+        // Outer loop resamples W2xH1 to W2xH2
+        let mut src_rows = src.chunks(stride);
+        for row in &self.coeffs_h[0..self.h2] {
             let w2 = self.w2;
-            let coeffs_w = &self.coeffs_w[0..w2];
-            for x2 in 0..w2 {
-                let mut accum = Format::new();
-                let line = &coeffs_w[x2];
-                for (i, coeff) in line.coeffs.iter().copied().enumerate() {
-                    let x0 = line.start + i;
-                    Format::add_acc(&mut accum, self.tmp[x0 * self.h2 + y2], coeff)
-                }
-                dst[offset] = self.pix_fmt.into_pixel(accum);
-                offset += 1;
+
+            // Inner loop resamples W1xH1 to W2xH1,
+            // but only as many rows as necessary to write a new line
+            // to the output
+            while self.tmp.len() < w2 * (row.start + row.coeffs.len()) {
+                let row = src_rows.next().unwrap();
+                let pix_fmt = &self.pix_fmt;
+                self.tmp.extend(self.coeffs_w[0..w2].iter().map(|col| {
+                    let mut accum = Format::new();
+                    let in_px = &row[col.start..col.start + col.coeffs.len()];
+                    for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
+                        pix_fmt.add(&mut accum, in_px, coeff)
+                    }
+                    accum
+                }));
             }
+
+            let tmp_rows = &self.tmp[w2 * row.start..];
+            for (col, dst_px) in dst[0..w2].iter_mut().enumerate() {
+                let mut accum = Format::new();
+                for (i, coeff) in row.coeffs.iter().copied().enumerate() {
+                    Format::add_acc(&mut accum, tmp_rows[w2 * i + col], coeff);
+                }
+                *dst_px = self.pix_fmt.into_pixel(accum);
+            }
+            dst = &mut dst[w2..];
         }
     }
-
 
     /// Resize `src` image data into `dst`.
     pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) {
@@ -311,10 +309,7 @@ impl<Format: PixelFormat> Resizer<Format> {
         assert!(self.w1 <= src_stride);
         assert!(src.len() >= src_stride * self.h1);
         assert_eq!(dst.len(), self.w2 * self.h2);
-        self.tmp.clear();
-        self.tmp.reserve(self.w1 * self.h2);
-        self.sample_rows(src, src_stride);
-        self.sample_cols(dst)
+        self.resample_both_axes(src, src_stride, dst);
     }
 }
 
