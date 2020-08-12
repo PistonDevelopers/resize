@@ -212,7 +212,7 @@ impl<Format: PixelFormat> Resizer<Format> {
         }
     }
 
-    fn calc_coeffs(s1: usize, s2: usize, f: &Filter, recycled_coeffs: &mut HashMap<(usize, u64), Arc<[f32]>>) -> Vec<CoeffsLine> {
+    fn calc_coeffs(s1: usize, s2: usize, f: &Filter, recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Vec<CoeffsLine> {
         let ratio = s1 as f32 / s2 as f32;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
@@ -224,7 +224,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             let end = (x1 + filter_radius).floor() as isize;
             let end = Self::clamp(end, 0, s1 as isize - 1) as usize;
             let sum: f32 = (start..=end).map(|i| (f.kernel)((i as f32 - x1) / filter_scale)).sum();
-            let key = (end - start, ((x1 - start as f32) * 100_000.) as u64);
+            let key = (end - start, filter_scale.to_ne_bytes(), (x1 - start as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
                 (start..=end).map(|i| {
                     let v = (f.kernel)((i as f32 - x1) / filter_scale);
