@@ -1,17 +1,17 @@
 [package]
 name = "resize"
-version = "0.5.0-alpha.2"
-authors = ["Kagami Hiiragi <kagami@genshiken.org>", "Kornel <kornel@geekhood.net>"]
+version = "0.5.0-beta.1"
 description = "Simple image resampling library in pure Rust."
-keywords = ["resize", "scale", "resample", "image", "graphics"]
-license = "MIT"
-readme = "README.md"
+authors = ["Kornel <kornel@geekhood.net>", "Kagami Hiiragi <kagami@genshiken.org>"]
 categories = ["graphics", "multimedia::images"]
+keywords = ["resize", "scale", "resample", "image", "graphics"]
+documentation = "https://docs.rs/resize"
 homepage = "https://github.com/PistonDevelopers/resize"
 repository = "https://github.com/PistonDevelopers/resize.git"
-documentation = "https://docs.rs/resize"
-edition = "2018"
+license = "MIT"
+readme = "README.md"
 include = ["Cargo.toml", "README.md", "LICENSE", "src/*.rs"]
+edition = "2018"
 
 [dev-dependencies]
 png = "0.16.7"
