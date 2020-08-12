@@ -1,10 +1,10 @@
-# resize [![Build Status](https://travis-ci.org/PistonDevelopers/resize.png?branch=master)](https://travis-ci.org/PistonDevelopers/resize) [![crates.io](https://img.shields.io/crates/v/resize.svg)](https://crates.io/crates/resize)
+# resize [![Build Status](https://travis-ci.org/PistonDevelopers/resize.png?branch=master)](https://travis-ci.org/PistonDevelopers/resize) [![crates.io](https://img.shields.io/crates/v/resize.svg)](https://crates.rs/crates/resize)
 
-Simple resampling library in pure Rust.
+Image resampling library in pure Rust.
 
 ## Features
 
-* No dependencies, minimal abstractions
+* Fast, with support for many pixel formats
 * No encoders/decoders, meant to be used with some external library
 * Tuned for resizing to the same dimensions multiple times: uses preallocated buffers and matrixes
 
@@ -28,11 +28,11 @@ let mut resizer = resize::new(w1, h1, w2, h2, RGB24, Lanczos3);
 resizer.resize(&src, &mut dst);
 ```
 
-See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](examples/resize.rs).
+See [API documentation](http://docs.piston.rs/resize/resize/) for overview of all available methods. See also [this example](https://github.com/PistonDevelopers/resize/blob/master/examples/resize.rs).
 
 ## Recommendations
 
-Read [this](http://www.imagemagick.org/Usage/filter/) and [this](http://www.imagemagick.org/Usage/filter/nicolas/) great articles on image resizing technics and resampling filters. Tldr; (with built-in filters of this library) use `Lanczos3` for downscaling, use `Mitchell` for upscaling. You may also want to [downscale in linear colorspace](http://www.imagemagick.org/Usage/resize/#resize_colorspace) (but not upscale). Gamma correction routines currently not included to the library, but actually quite simple to accomplish manually, see [here](https://en.wikipedia.org/wiki/Gamma_correction) for some basic theory.
+Read [this](https://www.imagemagick.org/Usage/filter/) and [this](https://www.imagemagick.org/Usage/filter/nicolas/) great articles on image resizing technics and resampling filters. Tldr; (with built-in filters of this library) use `Lanczos3` for downscaling, use `Mitchell` for upscaling. You may also want to [downscale in linear colorspace](https://www.imagemagick.org/Usage/resize/#resize_colorspace) (but not upscale). Gamma correction routines currently not included to the library, but actually quite simple to accomplish manually, see [here](https://en.wikipedia.org/wiki/Gamma_correction) for some basic theory.
 
 ## License
 
