@@ -5,6 +5,7 @@ use test::Bencher;
 
 use resize::Pixel::{Gray16, Gray8};
 use resize::Type::Triangle;
+use resize::Type::Lanczos3;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -27,6 +28,36 @@ fn precomputed_large(b: &mut Bencher) {
     let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
 
     b.iter(|| r.resize(&src, &mut dst));
+}
+
+#[bench]
+fn tiny(b: &mut Bencher) {
+    let (info, src0) = get_image();
+    let (w0, h0) = (info.width as usize, info.height as usize);
+    let (w1, h1) = (3200, 2400);
+    let mut src1 = vec![0; w1 * h1];
+
+    resize::new(w0, h0, w1, h1, Gray8, Triangle).resize(&src0, &mut src1);
+    let (w2, h2) = (16, 12);
+    let mut dst = vec![0; w2 * h2];
+
+    let mut r = resize::new(w1, h1, w2, h2, Gray8, Lanczos3);
+    b.iter(|| r.resize(&src1, &mut dst));
+}
+
+#[bench]
+fn huge_stretch(b: &mut Bencher) {
+    let (info, src0) = get_image();
+    let (w0, h0) = (info.width as usize, info.height as usize);
+    let (w1, h1) = (12, 12);
+    let mut src1 = vec![0; w1 * h1];
+
+    resize::new(w0, h0, w1, h1, Gray8, Lanczos3).resize(&src0, &mut src1);
+    let (w2, h2) = (1200, 1200);
+    let mut dst = vec![0; w2 * h2];
+
+    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
+    b.iter(|| r.resize(&src1, &mut dst));
 }
 
 #[bench]
