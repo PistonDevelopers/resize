@@ -58,6 +58,7 @@ fn precomputed_small_16bit(b: &mut Bencher) {
 }
 
 #[bench]
+#[allow(deprecated)]
 fn recomputed_small(b: &mut Bencher) {
     let (info, src) = get_image();
     let (w1, h1) = (info.width as usize, info.height as usize);

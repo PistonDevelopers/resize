@@ -5,6 +5,7 @@
 //! ```
 //! use resize::Pixel::RGB24;
 //! use resize::Type::Lanczos3;
+//! use rgb::RGB8;
 //!
 //! // Downscale by 2x.
 //! let (w1, h1) = (640, 480);
@@ -29,7 +30,9 @@ use std::collections::HashMap;
 use std::f32;
 
 mod px;
-pub use px::*;
+#[allow(deprecated)]
+use px::PixelFormatBackCompatShim;
+pub use px::PixelFormat;
 
 /// Resizing type to use.
 pub enum Type {
@@ -133,28 +136,41 @@ fn lanczos(taps: f32, x: f32) -> f32 {
 }
 
 /// Supported pixel formats.
-// TODO(Kagami): YUV planes?
 #[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
 pub mod Pixel {
+    use std::marker::PhantomData;
+
+    /// shh
+    pub(crate) mod generic {
+        use std::marker::PhantomData;
+        /// RGB pixels
+        #[derive(Debug, Copy, Clone)]
+        pub struct RgbFormats<InputSubpixel, OutputSubpixel>(pub PhantomData<(InputSubpixel, OutputSubpixel)>);
+        /// RGBA pixels
+        #[derive(Debug, Copy, Clone)]
+        pub struct RgbaFormats<InputSubpixel, OutputSubpixel>(pub PhantomData<(InputSubpixel, OutputSubpixel)>);
+        /// Grayscale pixels
+        #[derive(Debug, Copy, Clone)]
+        pub struct GrayFormats<InputSubpixel, OutputSubpixel>(pub PhantomData<(InputSubpixel, OutputSubpixel)>);
+    }
+    use self::generic::*;
+
     /// Grayscale, 8-bit.
-    #[derive(Debug, Clone, Copy)]
-    pub struct Gray8;
+    pub const Gray8: GrayFormats<u8, u8> = GrayFormats(PhantomData);
     /// Grayscale, 16-bit, native endian.
-    #[derive(Debug, Clone, Copy)]
-    pub struct Gray16;
+    pub const Gray16: GrayFormats<u16, u16> = GrayFormats(PhantomData);
+
     /// RGB, 8-bit per component.
-    #[derive(Debug, Clone, Copy)]
-    pub struct RGB24;
+    pub const RGB24: RgbFormats<u8, u8> = RgbFormats(PhantomData);
     /// RGB, 16-bit per component, native endian.
-    #[derive(Debug, Clone, Copy)]
-    pub struct RGB48;
+    pub const RGB48: RgbFormats<u16, u16> = RgbFormats(PhantomData);
     /// RGBA, 8-bit per component.
-    #[derive(Debug, Clone, Copy)]
-    pub struct RGBA;
+    pub const RGBA: RgbaFormats<u8, u8> = RgbaFormats(PhantomData);
     /// RGBA, 16-bit per component, native endian.
-    #[derive(Debug, Clone, Copy)]
-    pub struct RGBA64;
+    pub const RGBA64: RgbaFormats<u16, u16> = RgbaFormats(PhantomData);
 }
+
 
 /// Resampler with preallocated buffers and coeffecients for the given
 /// dimensions and filter type.
@@ -167,7 +183,7 @@ pub struct Resizer<Format: PixelFormat> {
     h2: usize,
     pix_fmt: Format,
     // Temporary/preallocated stuff.
-    tmp: Vec<f32>,
+    tmp: Vec<Format::Accumulator>,
     coeffs_w: Vec<CoeffsLine>,
     coeffs_h: Vec<CoeffsLine>,
 }
@@ -205,7 +221,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             h1: source_heigth,
             w2: dest_width,
             h2: dest_height,
-            tmp: Vec::with_capacity(source_width * dest_height * pixel_format.get_ncomponents()),
+            tmp: Vec::new(),
             pix_fmt: pixel_format,
             coeffs_w,
             coeffs_h,
@@ -248,76 +264,71 @@ impl<Format: PixelFormat> Resizer<Format> {
 
     // Resample W1xH1 to W1xH2.
     // Stride is a length of the source row (>= W1)
-    fn sample_rows(&mut self, src: &[Format::Subpixel], stride: usize) {
-        let ncomp = self.pix_fmt.get_ncomponents();
-        self.tmp.clear();
-        assert!(self.tmp.capacity() <= self.w1 * self.h2 * ncomp); // no reallocations
+    fn sample_rows(&mut self, src: &[Format::InputPixel], stride: usize) {
         for x1 in 0..self.w1 {
             let h2 = self.h2;
             let coeffs_h = &self.coeffs_h[0..h2];
             for y2 in 0..h2 {
-                let mut accum = Format::new_accum();
+                let mut accum = Format::new();
                 let line = &coeffs_h[y2];
-                let src = &src[(line.start * stride + x1) * ncomp..];
+                let src = &src[(line.start * stride + x1)..];
                 for (i, coeff) in line.coeffs.iter().copied().enumerate() {
-                    let base = (i * stride) * ncomp;
-                    let src = &src[base..base + ncomp];
-                    for (acc, s) in accum.as_mut().iter_mut().zip(src) {
-                        *acc += Format::from_subpixel(s) * coeff;
-                    }
+                    self.pix_fmt.add(&mut accum, src[i * stride], coeff);
                 }
-                for &v in accum.as_ref().iter() {
-                    self.tmp.push(v);
-                }
+                self.tmp.push(accum);
             }
         }
     }
 
     // Resample W1xH2 to W2xH2.
-    fn sample_cols(&mut self, dst: &mut [Format::Subpixel]) {
-        let ncomp = self.pix_fmt.get_ncomponents();
+    fn sample_cols(&mut self, dst: &mut [Format::OutputPixel]) {
         let mut offset = 0;
         // Assert that dst is large enough
-        let dst = &mut dst[0..self.h2 * self.w2 * ncomp];
+        let dst = &mut dst[0..self.h2 * self.w2];
         for y2 in 0..self.h2 {
             let w2 = self.w2;
             let coeffs_w = &self.coeffs_w[0..w2];
             for x2 in 0..w2 {
-                let mut accum = Format::new_accum();
+                let mut accum = Format::new();
                 let line = &coeffs_w[x2];
                 for (i, coeff) in line.coeffs.iter().copied().enumerate() {
                     let x0 = line.start + i;
-                    let base = (x0 * self.h2 + y2) * ncomp;
-                    let tmp = &self.tmp[base..base + ncomp];
-                    for (acc, &p) in accum.as_mut().iter_mut().zip(tmp) {
-                        *acc += p * coeff;
-                    }
+                    Format::add_acc(&mut accum, self.tmp[x0 * self.h2 + y2], coeff)
                 }
-                for &v in accum.as_ref().iter() {
-                    dst[offset] = Format::into_subpixel(v);
-                    offset += 1;
-                }
+                dst[offset] = self.pix_fmt.into_pixel(accum);
+                offset += 1;
             }
         }
     }
 
-    /// Resize `src` image data into `dst`.
-    pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) {
-        let stride = self.w1;
-        self.resize_stride(src, stride, dst)
-    }
 
-    /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
-    pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) {
+    /// Resize `src` image data into `dst`.
+    pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) {
         // TODO(Kagami):
         // * Multi-thread
         // * Bound checkings
         // * SIMD
         assert!(self.w1 <= src_stride);
-        assert!(src.len() >= src_stride * self.h1 * self.pix_fmt.get_ncomponents());
-        assert_eq!(dst.len(), self.w2 * self.h2 * self.pix_fmt.get_ncomponents());
+        assert!(src.len() >= src_stride * self.h1);
+        assert_eq!(dst.len(), self.w2 * self.h2);
+        self.tmp.clear();
+        self.tmp.reserve(self.w1 * self.h2);
         self.sample_rows(src, src_stride);
         self.sample_cols(dst)
+    }
+}
+
+/// These methods are for backwards compatibility. Prefer using `from_slice()`.
+#[allow(deprecated)]
+impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
+    /// Resize `src` image data into `dst`.
+    pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) {
+        self.resize_internal(Format::input(src), self.w1, Format::output(dst))
+    }
+
+    /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
+    pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) {
+        self.resize_internal(Format::input(src), src_stride, Format::output(dst))
     }
 }
 
@@ -326,30 +337,20 @@ pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width:
     Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)
 }
 
+/// Use `new().resize()` instead.
+///
 /// Resize image data to the new dimension in a single step.
 ///
 /// **NOTE:** If you need to resize to the same dimension multiple times,
 /// consider creating an resizer instance since it's faster.
 #[deprecated(note="Use resize::new().resize()")]
 #[allow(deprecated)]
-pub fn resize<Format: PixelFormat>(
+pub fn resize<Format: PixelFormatBackCompatShim>(
     src_width: usize, src_height: usize, dest_width: usize, dest_height: usize,
     pixel_format: Format, filter_type: Type,
     src: &[Format::Subpixel], dst: &mut [Format::Subpixel],
 ) {
-    Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type).resize(src, dst)
-}
-
-#[test]
-fn pixel_sizes() {
-    assert_eq!(Pixel::RGB24.get_ncomponents(), 3);
-    assert_eq!(Pixel::RGB24.get_size(), 3 * 1);
-    assert_eq!(Pixel::RGBA.get_size(), 4 * 1);
-
-    assert_eq!(Pixel::RGB48.get_ncomponents(), 3);
-    assert_eq!(Pixel::RGB48.get_size(), 3 * 2);
-    assert_eq!(Pixel::RGBA64.get_ncomponents(), 4);
-    assert_eq!(Pixel::RGBA64.get_size(), 4 * 2);
+    Resizer::<Format>::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type).resize(src, dst)
 }
 
 #[test]

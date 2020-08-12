@@ -1,183 +1,222 @@
-use std::mem;
-use crate::Pixel;
+use crate::Pixel::generic::RgbFormats;
+use crate::Pixel::generic::RgbaFormats;
+use crate::Pixel::generic::GrayFormats;
 
-/// See `Pixel`
-pub trait PixelFormat {
-    /// Array to hold temporary values.
-    type Accumulator: AsRef<[f32]> + AsMut<[f32]>;
-    /// Type of a Subpixel of each pixel (8 or 16 bits).
+use rgb::alt::Gray;
+use rgb::*;
+
+/// Glue for backwards compatibility with old version of the crate
+#[deprecated(note="Use APIs based on the newer PixelFormat")]
+#[doc(hidden)]
+pub trait PixelFormatBackCompatShim: PixelFormat {
     type Subpixel: Copy;
+    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel];
+    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel];
+}
 
-    /// New empty Accumulator.
-    fn new_accum() -> Self::Accumulator;
+/// Use [`Pixel`](Pixel) presets to specify pixel format.
+///
+/// Temporary object that adds pixels together
+pub trait PixelFormat {
+    /// Pixel type in the source image
+    type InputPixel: Copy;
+    /// Pixel type in the destination image (usually the same as Input)
+    type OutputPixel;
+    /// Temporary struct for the pixel in floating-point
+    type Accumulator: Copy;
 
-    /// Convert float to integer value in range appropriate for this pixel format.
-    fn into_subpixel(v: f32) -> Self::Subpixel;
+    /// Create new floating-point pixel
+    fn new() -> Self::Accumulator;
+    /// Add new pixel with a given weight (first axis)
+    fn add(&self, acc: &mut Self::Accumulator, inp: Self::InputPixel, coeff: f32);
+    /// Add bunch of accumulated pixels with a weight (second axis)
+    fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32);
+    /// Finalize, convert to output pixel format
+    fn into_pixel(&self, acc: Self::Accumulator) -> Self::OutputPixel;
+}
 
-    /// Convert pixel component to float
-    fn from_subpixel(v: &Self::Subpixel) -> f32;
+#[allow(deprecated)]
+impl<F: ToFloat> PixelFormatBackCompatShim for RgbFormats<F, F> {
+    type Subpixel = F;
 
-    /// Size of one pixel in that format in bytes.
-    #[inline(always)]
-    fn get_size(&self) -> usize {
-        self.get_ncomponents() * mem::size_of::<Self::Subpixel>()
+    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
+        arr.as_rgb()
     }
-
-    /// Return number of components of that format.
-    #[inline(always)]
-    fn get_ncomponents(&self) -> usize {
-        Self::new_accum().as_ref().len()
+    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel] {
+        arr.as_rgb_mut()
     }
 }
 
-impl PixelFormat for Pixel::Gray8 {
-    type Accumulator = [f32; 1];
-    type Subpixel = u8;
+impl<F: ToFloat, T: ToFloat> PixelFormat for RgbFormats<T, F> {
+    type InputPixel = RGB<F>;
+    type OutputPixel = RGB<T>;
+    type Accumulator = RGB<f32>;
 
-    #[must_use]
     #[inline(always)]
-    fn new_accum() -> Self::Accumulator {
-        [0.0; 1]
-    }
-
-    #[must_use]
-    #[inline(always)]
-    fn into_subpixel(v: f32) -> Self::Subpixel {
-        pack_u8(v)
+    fn new() -> Self::Accumulator {
+        RGB::new(0.,0.,0.)
     }
 
     #[inline(always)]
-    fn from_subpixel(px: &Self::Subpixel) -> f32 {
-        *px as f32
+    fn add(&self, acc: &mut Self::Accumulator, inp: RGB<F>, coeff: f32) {
+        acc.r += inp.r.to_float() * coeff;
+        acc.g += inp.g.to_float() * coeff;
+        acc.b += inp.b.to_float() * coeff;
+    }
+
+    #[inline(always)]
+    fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32) {
+        acc.r += inp.r * coeff;
+        acc.g += inp.g * coeff;
+        acc.b += inp.b * coeff;
+    }
+
+    #[inline(always)]
+    fn into_pixel(&self, acc: Self::Accumulator) -> RGB<T> {
+        RGB {
+            r: T::from_float(acc.r),
+            g: T::from_float(acc.g),
+            b: T::from_float(acc.b),
+        }
     }
 }
 
-impl PixelFormat for Pixel::Gray16 {
-    type Accumulator = [f32; 1];
-    type Subpixel = u16;
+#[allow(deprecated)]
+impl<F: ToFloat> PixelFormatBackCompatShim for RgbaFormats<F, F> {
+    type Subpixel = F;
 
-    #[must_use]
-    #[inline(always)]
-    fn new_accum() -> Self::Accumulator {
-        [0.0; 1]
+    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
+        arr.as_rgba()
     }
-
-    #[must_use]
-    #[inline(always)]
-    fn into_subpixel(v: f32) -> Self::Subpixel {
-        pack_u16(v)
-    }
-
-    #[inline(always)]
-    fn from_subpixel(px: &Self::Subpixel) -> f32 {
-        *px as f32
+    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel] {
+        arr.as_rgba_mut()
     }
 }
 
-impl PixelFormat for Pixel::RGB24 {
-    type Accumulator = [f32; 3];
-    type Subpixel = u8;
+impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaFormats<T, F> {
+    type InputPixel = RGBA<F>;
+    type OutputPixel = RGBA<T>;
+    type Accumulator = RGBA<f32>;
 
-    #[must_use]
     #[inline(always)]
-    fn new_accum() -> Self::Accumulator {
-        [0.0; 3]
-    }
-
-    #[must_use]
-    #[inline(always)]
-    fn into_subpixel(v: f32) -> Self::Subpixel {
-        pack_u8(v)
+    fn new() -> Self::Accumulator {
+        RGBA::new(0.,0.,0.,0.)
     }
 
     #[inline(always)]
-    fn from_subpixel(px: &Self::Subpixel) -> f32 {
-        *px as f32
-    }
-}
-impl PixelFormat for Pixel::RGBA {
-    type Accumulator = [f32; 4];
-    type Subpixel = u8;
-
-    #[must_use]
-    #[inline(always)]
-    fn new_accum() -> Self::Accumulator {
-        [0.0; 4]
-    }
-
-    #[must_use]
-    #[inline(always)]
-    fn into_subpixel(v: f32) -> Self::Subpixel {
-        pack_u8(v)
+    fn add(&self, acc: &mut Self::Accumulator, inp: RGBA<F>, coeff: f32) {
+        acc.r += inp.r.to_float() * coeff;
+        acc.g += inp.g.to_float() * coeff;
+        acc.b += inp.b.to_float() * coeff;
+        acc.a += inp.a.to_float() * coeff;
     }
 
     #[inline(always)]
-    fn from_subpixel(px: &Self::Subpixel) -> f32 {
-        *px as f32
-    }
-}
-impl PixelFormat for Pixel::RGB48 {
-    type Accumulator = [f32; 3];
-    type Subpixel = u16;
-
-    #[must_use]
-    #[inline(always)]
-    fn new_accum() -> Self::Accumulator {
-        [0.0; 3]
-    }
-
-    #[must_use]
-    #[inline(always)]
-    fn into_subpixel(v: f32) -> Self::Subpixel {
-        pack_u16(v)
+    fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32) {
+        acc.r += inp.r * coeff;
+        acc.g += inp.g * coeff;
+        acc.b += inp.b * coeff;
+        acc.a += inp.a * coeff;
     }
 
     #[inline(always)]
-    fn from_subpixel(px: &Self::Subpixel) -> f32 {
-        *px as f32
-    }
-}
-impl PixelFormat for Pixel::RGBA64 {
-    type Accumulator = [f32; 4];
-    type Subpixel = u16;
-
-    #[must_use]
-    #[inline(always)]
-    fn new_accum() -> Self::Accumulator {
-        [0.0; 4]
-    }
-
-    #[must_use]
-    #[inline(always)]
-    fn into_subpixel(v: f32) -> Self::Subpixel {
-        pack_u16(v)
-    }
-
-    #[inline(always)]
-    fn from_subpixel(px: &Self::Subpixel) -> f32 {
-        *px as f32
+    fn into_pixel(&self, acc: Self::Accumulator) -> RGBA<T> {
+        RGBA {
+            r: T::from_float(acc.r),
+            g: T::from_float(acc.g),
+            b: T::from_float(acc.b),
+            a: T::from_float(acc.a),
+        }
     }
 }
 
+#[allow(deprecated)]
+impl<F: ToFloat> PixelFormatBackCompatShim for GrayFormats<F, F> {
+    type Subpixel = F;
 
-#[inline]
-fn pack_u8(v: f32) -> u8 {
-    if v > 255.0 {
-        255
-    } else if v < 0.0 {
-        0
-    } else {
-        v.round() as u8
+    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
+        arr.as_gray()
+    }
+    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel] {
+        arr.as_gray_mut()
     }
 }
 
-#[inline]
-fn pack_u16(v: f32) -> u16 {
-    if v > 65535.0 {
-        65535
-    } else if v < 0.0 {
-        0
-    } else {
-        v.round() as u16
+impl<F: ToFloat, T: ToFloat> PixelFormat for GrayFormats<F, T> {
+    type InputPixel = Gray<F>;
+    type OutputPixel = Gray<T>;
+    type Accumulator = Gray<f32>;
+
+    #[inline(always)]
+    fn new() -> Self::Accumulator {
+        Gray::new(0.)
+    }
+
+    #[inline(always)]
+    fn add(&self, acc: &mut Self::Accumulator, inp: Gray<F>, coeff: f32) {
+        acc.0 += inp.0.to_float() * coeff;
+    }
+
+    #[inline(always)]
+    fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32) {
+        acc.0 += inp.0 * coeff;
+    }
+
+    #[inline(always)]
+    fn into_pixel(&self, acc: Self::Accumulator) -> Gray<T> {
+        Gray::new(T::from_float(acc.0))
+    }
+}
+
+pub trait ToFloat: Sized + Copy + 'static {
+    fn to_float(self) -> f32;
+    fn from_float(f: f32) -> Self;
+}
+
+impl ToFloat for u8 {
+    #[inline(always)]
+    fn to_float(self) -> f32 {
+        self as f32
+    }
+
+    #[inline(always)]
+    fn from_float(f: f32) -> Self {
+        f.round() as u8
+    }
+}
+
+impl ToFloat for u16 {
+    #[inline(always)]
+    fn to_float(self) -> f32 {
+        self as f32
+    }
+
+    #[inline(always)]
+    fn from_float(f: f32) -> Self {
+        f.round() as u16
+    }
+}
+
+impl ToFloat for f32 {
+    #[inline(always)]
+    fn to_float(self) -> f32 {
+        self
+    }
+
+    #[inline(always)]
+    fn from_float(f: f32) -> Self {
+        f
+    }
+}
+
+impl ToFloat for f64 {
+    #[inline(always)]
+    fn to_float(self) -> f32 {
+        self as f32
+    }
+
+    #[inline(always)]
+    fn from_float(f: f32) -> Self {
+        f as f64
     }
 }

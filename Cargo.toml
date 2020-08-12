@@ -1,6 +1,6 @@
 [package]
 name = "resize"
-version = "0.4.3"
+version = "0.5.0-alpha.2"
 authors = ["Kagami Hiiragi <kagami@genshiken.org>", "Kornel <kornel@geekhood.net>"]
 description = "Simple image resampling library in pure Rust."
 keywords = ["resize", "scale", "resample", "image", "graphics"]
@@ -15,3 +15,6 @@ include = ["Cargo.toml", "README.md", "LICENSE", "src/*.rs"]
 
 [dev-dependencies]
 png = "0.16.7"
+
+[dependencies]
+rgb = "0.8.22"
