@@ -11,6 +11,7 @@ homepage = "https://github.com/PistonDevelopers/resize"
 repository = "https://github.com/PistonDevelopers/resize.git"
 documentation = "https://docs.rs/resize"
 edition = "2018"
+include = ["Cargo.toml", "README.md", "LICENSE", "src/*.rs"]
 
 [dev-dependencies]
 png = "0.16.7"

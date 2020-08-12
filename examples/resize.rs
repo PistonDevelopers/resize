@@ -1,7 +1,9 @@
-use resize::Pixel::Gray8;
+use resize::Pixel;
 use resize::Type::Triangle;
 use std::env;
 use std::fs::File;
+use png::ColorType;
+use png::BitDepth;
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -17,11 +19,20 @@ fn main() {
     let (w1, h1) = (info.width as usize, info.height as usize);
     let dst_dims: Vec<_> = args[2].split("x").map(|s| s.parse().unwrap()).collect();
     let (w2, h2) = (dst_dims[0], dst_dims[1]);
-    let mut dst = vec![0; w2 * h2];
-    // TODO(Kagami): Support RGB24, RGBA and custom filters.
-    resize::resize(w1, h1, w2, h2, Gray8, Triangle, &src, &mut dst);
+    let mut dst = vec![0u8; w2 * h2 * info.color_type.samples()];
+
+    assert_eq!(BitDepth::Eight, info.bit_depth);
+    match info.color_type {
+        ColorType::Grayscale => resize::new(w1, h1, w2, h2, Pixel::Gray8, Triangle).resize(&src, &mut dst),
+        ColorType::RGB => resize::new(w1, h1, w2, h2, Pixel::RGB24, Triangle).resize(&src, &mut dst),
+        ColorType::Indexed => unimplemented!(),
+        ColorType::GrayscaleAlpha => unimplemented!(),
+        ColorType::RGBA => resize::new(w1, h1, w2, h2, Pixel::RGBA, Triangle).resize(&src, &mut dst),
+    };
 
     let outfh = File::create(&args[3]).unwrap();
-    let encoder = png::Encoder::new(outfh, w2 as u32, h2 as u32);
+    let mut encoder = png::Encoder::new(outfh, w2 as u32, h2 as u32);
+    encoder.set_color(info.color_type);
+    encoder.set_depth(info.bit_depth);
     encoder.write_header().unwrap().write_image_data(&dst).unwrap();
 }
