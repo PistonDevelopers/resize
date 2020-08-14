@@ -260,8 +260,8 @@ impl Scale {
             let key = (end - start, filter_scale.to_ne_bytes(), (x1 - start as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
                 (start..=end).map(|i| {
-                    let v = (kernel)((i as f32 - x1) / filter_scale);
-                    v / sum
+                    let n = (i as f32 - x1) / filter_scale;
+                    (kernel)(n.min(support).max(-support)) / sum
                 }).collect::<Arc<[_]>>()
             }).clone();
             CoeffsLine { start, coeffs }
