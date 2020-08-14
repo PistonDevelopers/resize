@@ -184,13 +184,24 @@ pub struct Resizer<Format: PixelFormat> {
 
 #[derive(Debug)]
 struct Scale {
-    // Source/target dimensions.
+    /// Source dimensions.
     w1: usize,
     h1: usize,
-    w2: usize,
-    h2: usize,
+    /// Vec's len == target dimensions
     coeffs_w: Vec<CoeffsLine>,
     coeffs_h: Vec<CoeffsLine>,
+}
+
+impl Scale {
+    #[inline]
+    fn w2(&self) -> usize {
+        self.coeffs_w.len()
+    }
+
+    #[inline]
+    fn h2(&self) -> usize {
+        self.coeffs_h.len()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -225,8 +236,6 @@ impl Scale {
         Self {
             w1: source_width,
             h1: source_heigth,
-            w2: dest_width,
-            h2: dest_height,
             coeffs_w,
             coeffs_h,
         }
@@ -280,12 +289,12 @@ impl<Format: PixelFormat> Resizer<Format> {
     /// Stride is a length of the source row (>= W1)
     fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: usize, mut dst: &mut [Format::OutputPixel]) {
         self.tmp.clear();
-        self.tmp.reserve(self.scale.w2 * self.scale.h1);
+        self.tmp.reserve(self.scale.w2() * self.scale.h1);
 
         // Outer loop resamples W2xH1 to W2xH2
         let mut src_rows = src.chunks(stride);
-        for row in &self.scale.coeffs_h[0..self.scale.h2] {
-            let w2 = self.scale.w2;
+        for row in &self.scale.coeffs_h {
+            let w2 = self.scale.w2();
 
             // Inner loop resamples W1xH1 to W2xH1,
             // but only as many rows as necessary to write a new line
@@ -293,7 +302,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             while self.tmp.len() < w2 * (row.start + row.coeffs.len()) {
                 let row = src_rows.next().unwrap();
                 let pix_fmt = &self.pix_fmt;
-                self.tmp.extend(self.scale.coeffs_w[0..w2].iter().map(|col| {
+                self.tmp.extend(self.scale.coeffs_w.iter().map(|col| {
                     let mut accum = Format::new();
                     let in_px = &row[col.start..col.start + col.coeffs.len()];
                     for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
@@ -323,7 +332,7 @@ impl<Format: PixelFormat> Resizer<Format> {
         // * SIMD
         assert!(self.scale.w1 <= src_stride);
         assert!(src.len() >= src_stride * self.scale.h1);
-        assert_eq!(dst.len(), self.scale.w2 * self.scale.h2);
+        assert_eq!(dst.len(), self.scale.w2() * self.scale.h2());
         self.resample_both_axes(src, src_stride, dst);
     }
 }
