@@ -38,26 +38,48 @@ fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
     }
 }
 
-#[test]
-fn qa() {
+fn test_width(w2: usize) {
     let tiger = &include_bytes!("../examples/tiger.png")[..];
-
     let (w1, h1, src) = load_png(&tiger);
     let mut res1 = vec![];
     let mut res2 = vec![];
-    for w2 in [1, 2, 10, 100, 1000, 2000].iter().copied() {
-        for h2 in [1, 2, 9, 99, 999, 1555].iter().copied() {
-            res1.clear();
-            res1.resize(w2 * h2, 0);
 
-            resize::new(w1, h1, w2, h2, Gray8, Lanczos3).resize(&src, &mut res1);
-            assert_equals(&res1, w2, h2, &format!("tests/t{}x{}.png", w2, h2));
+    for h2 in [1, 2, 9, 99, 999, 1555].iter().copied() {
+        res1.clear();
+        res1.resize(w2 * h2, 0);
 
-            res2.clear();
-            res2.resize(100 * 100, 255);
+        resize::new(w1, h1, w2, h2, Gray8, Lanczos3).resize(&src, &mut res1);
+        assert_equals(&res1, w2, h2, &format!("tests/t{}x{}.png", w2, h2));
 
-            resize::new(w2, h2, 100, 100, Gray8, Triangle).resize(&res1, &mut res2);
-            assert_equals(&res2, 100, 100, &format!("tests/t{}x{}-100.png", w2, h2));
-        }
+        res2.clear();
+        res2.resize(100 * 100, 255);
+
+        resize::new(w2, h2, 100, 100, Gray8, Triangle).resize(&res1, &mut res2);
+        assert_equals(&res2, 100, 100, &format!("tests/t{}x{}-100.png", w2, h2));
     }
+}
+
+#[test]
+fn test_w2000() {
+    test_width(2000);
+}
+#[test]
+fn test_w1000() {
+    test_width(1000);
+}
+#[test]
+fn test_w100() {
+    test_width(100);
+}
+#[test]
+fn test_w10() {
+    test_width(10);
+}
+#[test]
+fn test_w2() {
+    test_width(2);
+}
+#[test]
+fn test_w1() {
+    test_width(1);
 }
