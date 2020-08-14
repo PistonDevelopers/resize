@@ -3,9 +3,10 @@
 extern crate test;
 use test::Bencher;
 
-use resize::Pixel::{Gray16, Gray8};
+use resize::Pixel::{Gray16, Gray8, RGB24};
 use resize::Type::Triangle;
 use resize::Type::Lanczos3;
+use resize::Type::Point;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -97,4 +98,16 @@ fn recomputed_small(b: &mut Bencher) {
     let mut dst = vec![99; w2 * h2];
 
     b.iter(|| resize::resize(w1, h1, w2, h2, Gray8, Triangle, &src, &mut dst));
+}
+
+#[bench]
+#[allow(deprecated)]
+fn init_lanczos(b: &mut Bencher) {
+    b.iter(|| resize::new(test::black_box(100), 200, test::black_box(300), 400, RGB24, Lanczos3));
+}
+
+#[bench]
+#[allow(deprecated)]
+fn init_point(b: &mut Bencher) {
+    b.iter(|| resize::new(test::black_box(100), 200, test::black_box(300), 400, RGB24, Point));
 }
