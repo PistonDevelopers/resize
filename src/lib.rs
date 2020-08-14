@@ -73,12 +73,14 @@ impl Filter {
 
     /// Helper to create Cubic filter with custom B and C parameters.
     #[must_use]
+    #[deprecated(note = "use Type enum")]
     pub fn new_cubic(b: f32, c: f32) -> Self {
         Self::new(Box::new(move |x| cubic_bc(b, c, x)), 2.0)
     }
 
     /// Helper to create Lanczos filter with custom radius.
     #[must_use]
+    #[deprecated(note = "use Type enum")]
     pub fn new_lanczos(radius: f32) -> Self {
         Self::new(Box::new(move |x| lanczos(radius, x)), radius)
     }
@@ -98,7 +100,7 @@ fn triangle_kernel(x: f32) -> f32 {
 // https://github.com/PistonDevelopers/image/blob/2921cd7/src/imageops/sample.rs#L68
 // TODO(Kagami): Could be optimized for known B and C, see e.g.
 // https://github.com/sekrit-twc/zimg/blob/1a606c0/src/zimg/resize/filter.cpp#L149
-#[inline]
+#[inline(always)]
 fn cubic_bc(b: f32, c: f32, x: f32) -> f32 {
     let a = x.abs();
     let k = if a < 1.0 {
@@ -126,7 +128,7 @@ fn sinc(x: f32) -> f32 {
     }
 }
 
-#[inline]
+#[inline(always)]
 fn lanczos(taps: f32, x: f32) -> f32 {
     if x.abs() < taps {
         sinc(x) * sinc(x / taps)
@@ -210,15 +212,17 @@ struct CoeffsLine {
     coeffs: Arc<[f32]>,
 }
 
+type DynCallback<'a> = &'a dyn Fn(f32) -> f32;
+
 impl Scale {
     pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type: Type) -> Self {
         let filter = match filter_type {
-            Type::Point => Filter::new(Box::new(point_kernel), 0.0),
-            Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
-            Type::Catrom => Filter::new_cubic(0.0, 0.5),
-            Type::Mitchell => Filter::new_cubic(1.0/3.0, 1.0/3.0),
-            Type::Lanczos3 => Filter::new_lanczos(3.0),
-            Type::Custom(f) => f,
+            Type::Point => (&point_kernel as DynCallback, 0.0_f32),
+            Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
+            Type::Catrom => ((&|x| cubic_bc(0.0, 0.5, x)) as DynCallback, 2.0),
+            Type::Mitchell => ((&|x| cubic_bc(1.0/3.0, 1.0/3.0, x)) as DynCallback, 2.0),
+            Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
+            Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
         };
 
         // filters very often create repeating patterns,
@@ -226,11 +230,11 @@ impl Scale {
         // which should save some cache space
         let mut recycled_coeffs = HashMap::new();
 
-        let coeffs_w = Self::calc_coeffs(source_width, dest_width, &filter, &mut recycled_coeffs);
+        let coeffs_w = Self::calc_coeffs(source_width, dest_width, filter, &mut recycled_coeffs);
         let coeffs_h = if source_heigth == source_width && dest_height == dest_width {
             coeffs_w.clone()
         } else {
-            Self::calc_coeffs(source_heigth, dest_height, &filter, &mut recycled_coeffs)
+            Self::calc_coeffs(source_heigth, dest_height, filter, &mut recycled_coeffs)
         };
 
         Self {
@@ -241,22 +245,22 @@ impl Scale {
         }
     }
 
-    fn calc_coeffs(s1: usize, s2: usize, f: &Filter, recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Vec<CoeffsLine> {
+    fn calc_coeffs(s1: usize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Vec<CoeffsLine> {
         let ratio = s1 as f32 / s2 as f32;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
-        let filter_radius = (f.support * filter_scale).ceil();
+        let filter_radius = (support * filter_scale).ceil();
         (0..s2).map(|x2| {
             let x1 = (x2 as f32 + 0.5) * ratio - 0.5;
             let start = (x1 - filter_radius).ceil() as isize;
             let start = Self::clamp(start, 0, s1 as isize - 1) as usize;
             let end = (x1 + filter_radius).floor() as isize;
             let end = Self::clamp(end, 0, s1 as isize - 1) as usize;
-            let sum: f32 = (start..=end).map(|i| (f.kernel)((i as f32 - x1) / filter_scale)).sum();
+            let sum: f32 = (start..=end).map(|i| (kernel)((i as f32 - x1) / filter_scale)).sum();
             let key = (end - start, filter_scale.to_ne_bytes(), (x1 - start as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
                 (start..=end).map(|i| {
-                    let v = (f.kernel)((i as f32 - x1) / filter_scale);
+                    let v = (kernel)((i as f32 - x1) / filter_scale);
                     v / sum
                 }).collect::<Arc<[_]>>()
             }).clone();
