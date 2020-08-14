@@ -246,22 +246,22 @@ impl Scale {
     }
 
     fn calc_coeffs(s1: usize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Vec<CoeffsLine> {
-        let ratio = s1 as f32 / s2 as f32;
+        let ratio = s1 as f64 / s2 as f64;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
-        let filter_radius = (support * filter_scale).ceil();
+        let filter_radius = (support as f64 * filter_scale).ceil();
         (0..s2).map(|x2| {
-            let x1 = (x2 as f32 + 0.5) * ratio - 0.5;
+            let x1 = (x2 as f64 + 0.5) * ratio - 0.5;
             let start = (x1 - filter_radius).ceil() as isize;
             let start = Self::clamp(start, 0, s1 as isize - 1) as usize;
             let end = (x1 + filter_radius).floor() as isize;
             let end = Self::clamp(end, 0, s1 as isize - 1) as usize;
-            let sum: f32 = (start..=end).map(|i| (kernel)((i as f32 - x1) / filter_scale)).sum();
-            let key = (end - start, filter_scale.to_ne_bytes(), (x1 - start as f32).to_ne_bytes());
+            let sum: f64 = (start..=end).map(|i| (kernel)(((i as f64 - x1) / filter_scale) as f32) as f64).sum();
+            let key = (end - start, (filter_scale as f32).to_ne_bytes(), (start as f32 - x1 as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
                 (start..=end).map(|i| {
-                    let n = (i as f32 - x1) / filter_scale;
-                    (kernel)(n.min(support).max(-support)) / sum
+                    let n = ((i as f64 - x1) / filter_scale) as f32;
+                    ((kernel)(n.min(support).max(-support)) as f64 / sum) as f32
                 }).collect::<Arc<[_]>>()
             }).clone();
             CoeffsLine { start, coeffs }
