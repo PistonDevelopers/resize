@@ -176,14 +176,19 @@ pub mod Pixel {
 /// dimensions and filter type.
 #[derive(Debug)]
 pub struct Resizer<Format: PixelFormat> {
+    scale: Scale,
+    pix_fmt: Format,
+    // Temporary/preallocated stuff.
+    tmp: Vec<Format::Accumulator>,
+}
+
+#[derive(Debug)]
+struct Scale {
     // Source/target dimensions.
     w1: usize,
     h1: usize,
     w2: usize,
     h2: usize,
-    pix_fmt: Format,
-    // Temporary/preallocated stuff.
-    tmp: Vec<Format::Accumulator>,
     coeffs_w: Vec<CoeffsLine>,
     coeffs_h: Vec<CoeffsLine>,
 }
@@ -194,9 +199,8 @@ struct CoeffsLine {
     coeffs: Arc<[f32]>,
 }
 
-impl<Format: PixelFormat> Resizer<Format> {
-    /// Create a new resizer instance.
-    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Self {
+impl Scale {
+    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type: Type) -> Self {
         let filter = match filter_type {
             Type::Point => Filter::new(Box::new(point_kernel), 0.0),
             Type::Triangle => Filter::new(Box::new(triangle_kernel), 1.0),
@@ -205,6 +209,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             Type::Lanczos3 => Filter::new_lanczos(3.0),
             Type::Custom(f) => f,
         };
+
         // filters very often create repeating patterns,
         // so overall memory used by them can be reduced
         // which should save some cache space
@@ -216,13 +221,12 @@ impl<Format: PixelFormat> Resizer<Format> {
         } else {
             Self::calc_coeffs(source_heigth, dest_height, &filter, &mut recycled_coeffs)
         };
+
         Self {
             w1: source_width,
             h1: source_heigth,
             w2: dest_width,
             h2: dest_height,
-            tmp: Vec::new(),
-            pix_fmt: pixel_format,
             coeffs_w,
             coeffs_h,
         }
@@ -261,16 +265,27 @@ impl<Format: PixelFormat> Resizer<Format> {
             input
         }
     }
+}
+
+impl<Format: PixelFormat> Resizer<Format> {
+    /// Create a new resizer instance.
+    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Self {
+        Self {
+            scale: Scale::new(source_width, source_heigth, dest_width, dest_height, filter_type),
+            tmp: Vec::new(),
+            pix_fmt: pixel_format,
+        }
+    }
 
     /// Stride is a length of the source row (>= W1)
     fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: usize, mut dst: &mut [Format::OutputPixel]) {
         self.tmp.clear();
-        self.tmp.reserve(self.w2 * self.h1);
+        self.tmp.reserve(self.scale.w2 * self.scale.h1);
 
         // Outer loop resamples W2xH1 to W2xH2
         let mut src_rows = src.chunks(stride);
-        for row in &self.coeffs_h[0..self.h2] {
-            let w2 = self.w2;
+        for row in &self.scale.coeffs_h[0..self.scale.h2] {
+            let w2 = self.scale.w2;
 
             // Inner loop resamples W1xH1 to W2xH1,
             // but only as many rows as necessary to write a new line
@@ -278,7 +293,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             while self.tmp.len() < w2 * (row.start + row.coeffs.len()) {
                 let row = src_rows.next().unwrap();
                 let pix_fmt = &self.pix_fmt;
-                self.tmp.extend(self.coeffs_w[0..w2].iter().map(|col| {
+                self.tmp.extend(self.scale.coeffs_w[0..w2].iter().map(|col| {
                     let mut accum = Format::new();
                     let in_px = &row[col.start..col.start + col.coeffs.len()];
                     for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
@@ -306,9 +321,9 @@ impl<Format: PixelFormat> Resizer<Format> {
         // * Multi-thread
         // * Bound checkings
         // * SIMD
-        assert!(self.w1 <= src_stride);
-        assert!(src.len() >= src_stride * self.h1);
-        assert_eq!(dst.len(), self.w2 * self.h2);
+        assert!(self.scale.w1 <= src_stride);
+        assert!(src.len() >= src_stride * self.scale.h1);
+        assert_eq!(dst.len(), self.scale.w2 * self.scale.h2);
         self.resample_both_axes(src, src_stride, dst);
     }
 }
@@ -318,7 +333,7 @@ impl<Format: PixelFormat> Resizer<Format> {
 impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
     /// Resize `src` image data into `dst`.
     pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) {
-        self.resize_internal(Format::input(src), self.w1, Format::output(dst))
+        self.resize_internal(Format::input(src), self.scale.w1, Format::output(dst))
     }
 
     /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
