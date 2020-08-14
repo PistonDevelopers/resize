@@ -3,7 +3,7 @@
 extern crate test;
 use test::Bencher;
 
-use resize::Pixel::{Gray16, Gray8, RGB24};
+use resize::Pixel::{Gray16, Gray8, RGB24, RGBA64};
 use resize::Type::Triangle;
 use resize::Type::Lanczos3;
 use resize::Type::Point;
@@ -71,6 +71,35 @@ fn precomputed_small(b: &mut Bencher) {
     let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
 
     b.iter(|| r.resize(&src, &mut dst));
+}
+
+#[bench]
+fn a_small_rgb(b: &mut Bencher) {
+    let (info, src) = get_image();
+    let src: Vec<_> = src.into_iter().map(|c| rgb::RGB::new(c,c,c)).collect();
+    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w2, h2) = (100, 100);
+    let mut dst = vec![240; w2 * h2 * 3];
+
+    let mut r = resize::new(w1, h1, w2, h2, RGB24, Triangle);
+
+    b.iter(|| r.resize(rgb::ComponentSlice::as_slice(&src[..]), &mut dst));
+}
+
+#[bench]
+fn a_small_rgba16(b: &mut Bencher) {
+    let (info, src) = get_image();
+    let src: Vec<_> = src.into_iter().map(|c| {
+        let w = ((c as u16) << 8) | c as u16;
+        rgb::RGBA::new(w,w,w,65535)
+    }).collect();
+    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w2, h2) = (100, 100);
+    let mut dst = vec![0u16; w2 * h2 * 4];
+
+    let mut r = resize::new(w1, h1, w2, h2, RGBA64, Triangle);
+
+    b.iter(|| r.resize(rgb::ComponentSlice::as_slice(&src[..]), &mut dst));
 }
 
 #[bench]
