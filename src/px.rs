@@ -181,7 +181,9 @@ impl ToFloat for u8 {
 
     #[inline(always)]
     fn from_float(f: f32) -> Self {
-        f.round() as u8
+        unsafe {
+            (0f32).max(f.round()).min(255.).to_int_unchecked()
+        }
     }
 }
 
@@ -193,7 +195,9 @@ impl ToFloat for u16 {
 
     #[inline(always)]
     fn from_float(f: f32) -> Self {
-        f.round() as u16
+        unsafe {
+            (0f32).max(f.round()).min(65535.).to_int_unchecked()
+        }
     }
 }
 
