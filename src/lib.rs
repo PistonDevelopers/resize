@@ -319,8 +319,8 @@ impl<Format: PixelFormat> Resizer<Format> {
             let tmp_rows = &self.tmp[w2 * row.start..];
             for (col, dst_px) in dst[0..w2].iter_mut().enumerate() {
                 let mut accum = Format::new();
-                for (i, coeff) in row.coeffs.iter().copied().enumerate() {
-                    Format::add_acc(&mut accum, tmp_rows[w2 * i + col], coeff);
+                for (coeff, other_row) in row.coeffs.iter().copied().zip(tmp_rows.chunks_exact(w2)) {
+                    Format::add_acc(&mut accum, other_row[col], coeff);
                 }
                 *dst_px = self.pix_fmt.into_pixel(accum);
             }
