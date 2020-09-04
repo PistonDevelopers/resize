@@ -1,6 +1,5 @@
-use resize::Pixel::Gray8;
-use resize::Type::Triangle;
-use resize::Type::Lanczos3;
+use resize::Pixel::*;
+use resize::Type::*;
 use std::fs;
 use std::path::Path;
 
@@ -28,6 +27,8 @@ fn img_diff(a: &[u8], b: &[u8]) -> f64 {
 }
 
 fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
+    assert_eq!(img.len(), w2 * h2);
+    assert!(w2 > 0 && h2 > 0);
     let (_, _, expected) = load_png(&fs::read(&expected_filename).expect(expected_filename)).expect(expected_filename);
 
     let diff = img_diff(&img, &expected);
@@ -38,11 +39,26 @@ fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
     }
 }
 
+#[test]
+fn test_filter_init() {
+    let _ = resize::new(3, 3, 25, 25, RGBF64, Point);
+    let _ = resize::new(10, 10, 5, 5, RGBF64, Point);
+    let _ = resize::new(3, 3, 25, 25, RGBF32, Triangle);
+    let _ = resize::new(10, 10, 5, 5, RGBF32, Triangle);
+    let _ = resize::new(3, 3, 25, 25, RGBAF64, Catrom);
+    let _ = resize::new(10, 10, 5, 5, RGBAF64, Catrom);
+    let _ = resize::new(3, 3, 25, 25, RGBAF32, Mitchell);
+    let _ = resize::new(10, 10, 5, 5, RGBAF32, Mitchell);
+    let _ = resize::new(3, 4, 25, 99, GrayF64, Lanczos3);
+    let _ = resize::new(99, 70, 5, 1, GrayF64, Lanczos3);
+}
+
 fn test_width(w2: usize) {
     let tiger = &include_bytes!("../examples/tiger.png")[..];
     let (w1, h1, src) = load_png(&tiger).unwrap();
     let mut res1 = vec![];
     let mut res2 = vec![];
+    let mut res3 = vec![0; 80*120];
 
     for h2 in [1, 2, 9, 99, 999, 1555].iter().copied() {
         res1.clear();
@@ -56,6 +72,9 @@ fn test_width(w2: usize) {
 
         resize::new(w2, h2, 100, 100, Gray8, Triangle).resize(&res1, &mut res2);
         assert_equals(&res2, 100, 100, &format!("tests/t{}x{}-100.png", w2, h2));
+
+        resize::new(100, 100, 80, 120, Gray8, Point).resize(&res2, &mut res3);
+        assert_equals(&res3, 80, 120, &format!("tests/t{}x{}-point.png", w2, h2));
     }
 }
 
