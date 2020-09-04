@@ -67,6 +67,7 @@ impl Filter {
     /// let filter = Filter::new(Box::new(kernel), 1.0);
     /// ```
     #[must_use]
+    #[inline(always)]
     pub fn new(kernel: Box<dyn Fn(f32) -> f32>, support: f32) -> Self {
         Self { kernel, support }
     }
@@ -195,12 +196,12 @@ struct Scale {
 }
 
 impl Scale {
-    #[inline]
+    #[inline(always)]
     fn w2(&self) -> usize {
         self.coeffs_w.len()
     }
 
-    #[inline]
+    #[inline(always)]
     fn h2(&self) -> usize {
         self.coeffs_h.len()
     }
@@ -268,7 +269,7 @@ impl Scale {
         }).collect()
     }
 
-    #[inline]
+    #[inline(always)]
     fn clamp<N: PartialOrd>(input: N, min: N, max: N) -> N {
         if input > max {
             max
@@ -282,6 +283,7 @@ impl Scale {
 
 impl<Format: PixelFormat> Resizer<Format> {
     /// Create a new resizer instance.
+    #[inline]
     pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Self {
         Self {
             scale: Scale::new(source_width, source_heigth, dest_width, dest_height, filter_type),
@@ -329,6 +331,7 @@ impl<Format: PixelFormat> Resizer<Format> {
     }
 
     /// Resize `src` image data into `dst`.
+    #[inline]
     pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) {
         // TODO(Kagami):
         // * Multi-thread
@@ -344,17 +347,20 @@ impl<Format: PixelFormat> Resizer<Format> {
 #[allow(deprecated)]
 impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
     /// Resize `src` image data into `dst`.
+    #[inline]
     pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) {
         self.resize_internal(Format::input(src), self.scale.w1, Format::output(dst))
     }
 
     /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
+    #[inline]
     pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) {
         self.resize_internal(Format::input(src), src_stride, Format::output(dst))
     }
 }
 
 /// Create a new resizer instance. Alias for `Resizer::new`.
+#[inline(always)]
 pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Resizer<Format> {
     Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)
 }
