@@ -4,13 +4,13 @@ use resize::Type::Lanczos3;
 use std::fs;
 use std::path::Path;
 
-fn load_png(mut data: &[u8]) -> (usize, usize, Vec<u8>) {
+fn load_png(mut data: &[u8]) -> Result<(usize, usize, Vec<u8>), png::DecodingError> {
     let decoder = png::Decoder::new(&mut data);
-    let (info, mut reader) = decoder.read_info().unwrap();
+    let (info, mut reader) = decoder.read_info()?;
     let mut src = vec![0; info.buffer_size()];
-    reader.next_frame(&mut src).unwrap();
+    reader.next_frame(&mut src)?;
 
-    (info.width as usize, info.height as usize, src)
+    Ok((info.width as usize, info.height as usize, src))
 }
 
 fn write_png(path: &Path, w2: usize, h2: usize, pixels: &[u8]) {
@@ -28,7 +28,7 @@ fn img_diff(a: &[u8], b: &[u8]) -> f64 {
 }
 
 fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
-    let (_, _, expected) = load_png(&fs::read(&expected_filename).expect(expected_filename));
+    let (_, _, expected) = load_png(&fs::read(&expected_filename).expect(expected_filename)).expect(expected_filename);
 
     let diff = img_diff(&img, &expected);
     if diff > 0.0004 {
@@ -40,7 +40,7 @@ fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
 
 fn test_width(w2: usize) {
     let tiger = &include_bytes!("../examples/tiger.png")[..];
-    let (w1, h1, src) = load_png(&tiger);
+    let (w1, h1, src) = load_png(&tiger).unwrap();
     let mut res1 = vec![];
     let mut res2 = vec![];
 
