@@ -273,7 +273,6 @@ impl Scale {
             let end = (x1 + filter_radius).floor() as isize;
             let end = (end.min(s1 as isize - 1).max(0) as usize).max(start);
             let sum: f64 = (start..=end).map(|i| (kernel)(((i as f64 - x1) / filter_scale) as f32) as f64).sum();
-            eprintln!("{:?}..={:?}", start, end);
             let key = (end - start, (filter_scale as f32).to_ne_bytes(), (start as f32 - x1 as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
                 (start..=end).map(|i| {
