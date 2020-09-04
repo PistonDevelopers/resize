@@ -341,7 +341,6 @@ impl<Format: PixelFormat> Resizer<Format> {
     }
 }
 
-/// These methods are for backwards compatibility. Prefer using `from_slice()`.
 #[allow(deprecated)]
 impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
     /// Resize `src` image data into `dst`.
