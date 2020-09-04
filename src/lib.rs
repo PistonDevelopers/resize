@@ -164,6 +164,11 @@ pub mod Pixel {
     /// Grayscale, 16-bit, native endian.
     pub const Gray16: GrayFormats<u16, u16> = GrayFormats(PhantomData);
 
+    /// Grayscale, 32-bit float
+    pub const GrayF32: GrayFormats<f32, f32> = GrayFormats(PhantomData);
+    /// Grayscale, 64-bit float
+    pub const GrayF64: GrayFormats<f64, f64> = GrayFormats(PhantomData);
+
     /// RGB, 8-bit per component.
     pub const RGB24: RgbFormats<u8, u8> = RgbFormats(PhantomData);
     /// RGB, 16-bit per component, native endian.
@@ -172,6 +177,16 @@ pub mod Pixel {
     pub const RGBA: RgbaFormats<u8, u8> = RgbaFormats(PhantomData);
     /// RGBA, 16-bit per component, native endian.
     pub const RGBA64: RgbaFormats<u16, u16> = RgbaFormats(PhantomData);
+
+    /// RGB, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
+    pub const RGBF32: RgbFormats<f32, f32> = RgbFormats(PhantomData);
+    /// RGB, 64-bit double per component.
+    pub const RGBF64: RgbFormats<f64, f64> = RgbFormats(PhantomData);
+
+    /// RGBA, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
+    pub const RGBAF32: RgbaFormats<f32, f32> = RgbaFormats(PhantomData);
+    /// RGBA, 64-bit double per component.
+    pub const RGBAF64: RgbaFormats<f64, f64> = RgbaFormats(PhantomData);
 }
 
 
@@ -390,4 +405,15 @@ fn resize_stride() {
         65535,65535,3,4,
     ], 4, &mut dst);
     assert_eq!(&dst, &[65535; 12]);
+}
+
+#[test]
+fn resize_float() {
+    let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle);
+    let mut dst = vec![0.; 12];
+    r.resize_stride(&[
+        65535.,65535.,1.,2.,
+        65535.,65535.,3.,4.,
+    ], 4, &mut dst);
+    assert_eq!(&dst, &[65535.; 12]);
 }
