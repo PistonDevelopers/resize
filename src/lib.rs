@@ -269,10 +269,11 @@ impl Scale {
         (0..s2).map(|x2| {
             let x1 = (x2 as f64 + 0.5) * ratio - 0.5;
             let start = (x1 - filter_radius).ceil() as isize;
-            let start = Self::clamp(start, 0, s1 as isize - 1) as usize;
+            let start = start.min(s1 as isize - 1).max(0) as usize;
             let end = (x1 + filter_radius).floor() as isize;
-            let end = Self::clamp(end, 0, s1 as isize - 1) as usize;
+            let end = (end.min(s1 as isize - 1).max(0) as usize).max(start);
             let sum: f64 = (start..=end).map(|i| (kernel)(((i as f64 - x1) / filter_scale) as f32) as f64).sum();
+            eprintln!("{:?}..={:?}", start, end);
             let key = (end - start, (filter_scale as f32).to_ne_bytes(), (start as f32 - x1 as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
                 (start..=end).map(|i| {
@@ -282,17 +283,6 @@ impl Scale {
             }).clone();
             CoeffsLine { start, coeffs }
         }).collect()
-    }
-
-    #[inline(always)]
-    fn clamp<N: PartialOrd>(input: N, min: N, max: N) -> N {
-        if input > max {
-            max
-        } else if input < min {
-            min
-        } else {
-            input
-        }
     }
 }
 
