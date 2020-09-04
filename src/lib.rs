@@ -352,9 +352,9 @@ impl<Format: PixelFormat> Resizer<Format> {
         // * Multi-thread
         // * Bound checkings
         // * SIMD
-        assert!(self.scale.w1 <= src_stride);
-        assert!(src.len() >= src_stride * self.scale.h1);
-        assert_eq!(dst.len(), self.scale.w2() * self.scale.h2());
+        assert!(self.scale.w1 <= src_stride, "width must be smaller than stride");
+        assert!(src.len() >= (src_stride * self.scale.h1) + self.scale.w1 - src_stride, "source length must be larger than area");
+        assert_eq!(dst.len(), self.scale.w2() * self.scale.h2(), "destination slice must be exactly {}x{}", self.scale.w2(), self.scale.h2());
         self.resample_both_axes(src, src_stride, dst);
     }
 }
