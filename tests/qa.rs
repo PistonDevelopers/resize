@@ -102,3 +102,8 @@ fn test_w2() {
 fn test_w1() {
     test_width(1);
 }
+
+#[test]
+fn can_name_type() {
+    let _: resize::Resizer<resize::formats::Gray<u8, u8>> = resize::new(10, 10, 100, 100, Gray8, Triangle);
+}

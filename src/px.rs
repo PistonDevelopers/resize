@@ -1,6 +1,6 @@
-use crate::Pixel::generic::RgbFormats;
-use crate::Pixel::generic::RgbaFormats;
-use crate::Pixel::generic::GrayFormats;
+use crate::formats::Rgb as RgbF;
+use crate::formats::Rgba as RgbaF;
+use crate::formats::Gray as GrayF;
 
 use rgb::alt::Gray;
 use rgb::*;
@@ -14,9 +14,9 @@ pub trait PixelFormatBackCompatShim: PixelFormat {
     fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel];
 }
 
-/// Use [`Pixel`](Pixel) presets to specify pixel format.
+/// Use [`Pixel`](crate::Pixel) presets to specify pixel format.
 ///
-/// Temporary object that adds pixels together
+/// The trait represents a temporary object that adds pixels together.
 pub trait PixelFormat {
     /// Pixel type in the source image
     type InputPixel: Copy;
@@ -36,7 +36,7 @@ pub trait PixelFormat {
 }
 
 #[allow(deprecated)]
-impl<F: ToFloat> PixelFormatBackCompatShim for RgbFormats<F, F> {
+impl<F: ToFloat> PixelFormatBackCompatShim for RgbF<F, F> {
     type Subpixel = F;
 
     fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
@@ -47,7 +47,7 @@ impl<F: ToFloat> PixelFormatBackCompatShim for RgbFormats<F, F> {
     }
 }
 
-impl<F: ToFloat, T: ToFloat> PixelFormat for RgbFormats<T, F> {
+impl<F: ToFloat, T: ToFloat> PixelFormat for RgbF<T, F> {
     type InputPixel = RGB<F>;
     type OutputPixel = RGB<T>;
     type Accumulator = RGB<f32>;
@@ -82,7 +82,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for RgbFormats<T, F> {
 }
 
 #[allow(deprecated)]
-impl<F: ToFloat> PixelFormatBackCompatShim for RgbaFormats<F, F> {
+impl<F: ToFloat> PixelFormatBackCompatShim for RgbaF<F, F> {
     type Subpixel = F;
 
     fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
@@ -93,7 +93,7 @@ impl<F: ToFloat> PixelFormatBackCompatShim for RgbaFormats<F, F> {
     }
 }
 
-impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaFormats<T, F> {
+impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaF<T, F> {
     type InputPixel = RGBA<F>;
     type OutputPixel = RGBA<T>;
     type Accumulator = RGBA<f32>;
@@ -131,7 +131,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaFormats<T, F> {
 }
 
 #[allow(deprecated)]
-impl<F: ToFloat> PixelFormatBackCompatShim for GrayFormats<F, F> {
+impl<F: ToFloat> PixelFormatBackCompatShim for GrayF<F, F> {
     type Subpixel = F;
 
     fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
@@ -142,7 +142,7 @@ impl<F: ToFloat> PixelFormatBackCompatShim for GrayFormats<F, F> {
     }
 }
 
-impl<F: ToFloat, T: ToFloat> PixelFormat for GrayFormats<F, T> {
+impl<F: ToFloat, T: ToFloat> PixelFormat for GrayF<F, T> {
     type InputPixel = Gray<F>;
     type OutputPixel = Gray<T>;
     type Accumulator = Gray<f32>;

@@ -32,6 +32,8 @@ use std::f32;
 mod px;
 #[allow(deprecated)]
 use px::PixelFormatBackCompatShim;
+
+#[doc(hidden)]
 pub use px::PixelFormat;
 
 /// Resizing type to use.
@@ -138,57 +140,59 @@ fn lanczos(taps: f32, x: f32) -> f32 {
     }
 }
 
-/// Supported pixel formats.
+/// Predefined constants for supported pixel formats.
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 pub mod Pixel {
     use std::marker::PhantomData;
-
-    /// shh
-    pub(crate) mod generic {
-        use std::marker::PhantomData;
-        /// RGB pixels
-        #[derive(Debug, Copy, Clone)]
-        pub struct RgbFormats<InputSubpixel, OutputSubpixel>(pub PhantomData<(InputSubpixel, OutputSubpixel)>);
-        /// RGBA pixels
-        #[derive(Debug, Copy, Clone)]
-        pub struct RgbaFormats<InputSubpixel, OutputSubpixel>(pub PhantomData<(InputSubpixel, OutputSubpixel)>);
-        /// Grayscale pixels
-        #[derive(Debug, Copy, Clone)]
-        pub struct GrayFormats<InputSubpixel, OutputSubpixel>(pub PhantomData<(InputSubpixel, OutputSubpixel)>);
-    }
-    use self::generic::*;
+    use crate::formats;
 
     /// Grayscale, 8-bit.
-    pub const Gray8: GrayFormats<u8, u8> = GrayFormats(PhantomData);
+    pub const Gray8: formats::Gray<u8, u8> = formats::Gray(PhantomData);
     /// Grayscale, 16-bit, native endian.
-    pub const Gray16: GrayFormats<u16, u16> = GrayFormats(PhantomData);
+    pub const Gray16: formats::Gray<u16, u16> = formats::Gray(PhantomData);
 
     /// Grayscale, 32-bit float
-    pub const GrayF32: GrayFormats<f32, f32> = GrayFormats(PhantomData);
+    pub const GrayF32: formats::Gray<f32, f32> = formats::Gray(PhantomData);
     /// Grayscale, 64-bit float
-    pub const GrayF64: GrayFormats<f64, f64> = GrayFormats(PhantomData);
+    pub const GrayF64: formats::Gray<f64, f64> = formats::Gray(PhantomData);
 
     /// RGB, 8-bit per component.
-    pub const RGB24: RgbFormats<u8, u8> = RgbFormats(PhantomData);
+    pub const RGB24: formats::Rgb<u8, u8> = formats::Rgb(PhantomData);
     /// RGB, 16-bit per component, native endian.
-    pub const RGB48: RgbFormats<u16, u16> = RgbFormats(PhantomData);
+    pub const RGB48: formats::Rgb<u16, u16> = formats::Rgb(PhantomData);
     /// RGBA, 8-bit per component.
-    pub const RGBA: RgbaFormats<u8, u8> = RgbaFormats(PhantomData);
+    pub const RGBA: formats::Rgba<u8, u8> = formats::Rgba(PhantomData);
     /// RGBA, 16-bit per component, native endian.
-    pub const RGBA64: RgbaFormats<u16, u16> = RgbaFormats(PhantomData);
+    pub const RGBA64: formats::Rgba<u16, u16> = formats::Rgba(PhantomData);
 
     /// RGB, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
-    pub const RGBF32: RgbFormats<f32, f32> = RgbFormats(PhantomData);
+    pub const RGBF32: formats::Rgb<f32, f32> = formats::Rgb(PhantomData);
     /// RGB, 64-bit double per component.
-    pub const RGBF64: RgbFormats<f64, f64> = RgbFormats(PhantomData);
+    pub const RGBF64: formats::Rgb<f64, f64> = formats::Rgb(PhantomData);
 
     /// RGBA, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
-    pub const RGBAF32: RgbaFormats<f32, f32> = RgbaFormats(PhantomData);
+    pub const RGBAF32: formats::Rgba<f32, f32> = formats::Rgba(PhantomData);
     /// RGBA, 64-bit double per component.
-    pub const RGBAF64: RgbaFormats<f64, f64> = RgbaFormats(PhantomData);
+    pub const RGBAF64: formats::Rgba<f64, f64> = formats::Rgba(PhantomData);
 }
 
+/// Implementation detail
+///
+/// These structs implement `PixelFormat` trait that allows conversion to and from internal pixel representation.
+#[doc(hidden)]
+pub mod formats {
+    use std::marker::PhantomData;
+    /// RGB pixels
+    #[derive(Debug, Copy, Clone)]
+    pub struct Rgb<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
+    /// RGBA pixels
+    #[derive(Debug, Copy, Clone)]
+    pub struct Rgba<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
+    /// Grayscale pixels
+    #[derive(Debug, Copy, Clone)]
+    pub struct Gray<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
+}
 
 /// Resampler with preallocated buffers and coeffecients for the given
 /// dimensions and filter type.
