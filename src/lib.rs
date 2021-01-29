@@ -31,6 +31,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use std::f32;
 use std::fmt;
+use std::num::NonZeroUsize;
 
 /// See [Error]
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -213,8 +214,8 @@ pub struct Resizer<Format: PixelFormat> {
 #[derive(Debug)]
 struct Scale {
     /// Source dimensions.
-    w1: usize,
-    h1: usize,
+    w1: NonZeroUsize,
+    h1: NonZeroUsize,
     /// Vec's len == target dimensions
     coeffs_w: Vec<CoeffsLine>,
     coeffs_h: Vec<CoeffsLine>,
@@ -242,7 +243,9 @@ type DynCallback<'a> = &'a dyn Fn(f32) -> f32;
 
 impl Scale {
     pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type: Type) -> Result<Self> {
-        if source_width == 0 || source_heigth == 0 || dest_width == 0 || dest_height == 0 {
+        let source_width = NonZeroUsize::new(source_width).ok_or(Error::InvalidParameters)?;
+        let source_heigth = NonZeroUsize::new(source_heigth).ok_or(Error::InvalidParameters)?;
+        if dest_width == 0 || dest_height == 0 {
             return Err(Error::InvalidParameters);
         }
         let filter = match filter_type {
@@ -274,8 +277,8 @@ impl Scale {
         })
     }
 
-    fn calc_coeffs(s1: usize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
-        let ratio = s1 as f64 / s2 as f64;
+    fn calc_coeffs(s1: NonZeroUsize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
+        let ratio = s1.get() as f64 / s2 as f64;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
         let filter_radius = (support as f64 * filter_scale).ceil();
@@ -283,9 +286,9 @@ impl Scale {
         res.extend((0..s2).map(|x2| {
             let x1 = (x2 as f64 + 0.5) * ratio - 0.5;
             let start = (x1 - filter_radius).ceil() as isize;
-            let start = start.min(s1 as isize - 1).max(0) as usize;
+            let start = start.min(s1.get() as isize - 1).max(0) as usize;
             let end = (x1 + filter_radius).floor() as isize;
-            let end = (end.min(s1 as isize - 1).max(0) as usize).max(start);
+            let end = (end.min(s1.get() as isize - 1).max(0) as usize).max(start);
             let sum: f64 = (start..=end).map(|i| (kernel)(((i as f64 - x1) / filter_scale) as f32) as f64).sum();
             let key = (end - start, (filter_scale as f32).to_ne_bytes(), (start as f32 - x1 as f32).to_ne_bytes());
             let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
@@ -312,12 +315,12 @@ impl<Format: PixelFormat> Resizer<Format> {
     }
 
     /// Stride is a length of the source row (>= W1)
-    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: usize, mut dst: &mut [Format::OutputPixel]) -> Result<()> {
+    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, mut dst: &mut [Format::OutputPixel]) -> Result<()> {
         self.tmp.clear();
-        FallibleVec::try_reserve(&mut self.tmp, self.scale.w2() * self.scale.h1)?;
+        FallibleVec::try_reserve(&mut self.tmp, self.scale.w2() * self.scale.h1.get())?;
 
         // Outer loop resamples W2xH1 to W2xH2
-        let mut src_rows = src.chunks(stride);
+        let mut src_rows = src.chunks(stride.get());
         for row in &self.scale.coeffs_h {
             let w2 = self.scale.w2();
 
@@ -352,14 +355,15 @@ impl<Format: PixelFormat> Resizer<Format> {
 
     /// Resize `src` image data into `dst`.
     #[inline]
-    pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) -> Result<()> {
+    pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
         // TODO(Kagami):
         // * Multi-thread
-        // * Bound checkings
         // * SIMD
-        assert!(self.scale.w1 <= src_stride, "width must be smaller than stride");
-        assert!(src.len() >= (src_stride * self.scale.h1) + self.scale.w1 - src_stride, "source length must be larger than area");
-        assert_eq!(dst.len(), self.scale.w2() * self.scale.h2(), "destination slice must be exactly {}x{}", self.scale.w2(), self.scale.h2());
+        if self.scale.w1.get() > src_stride.get() ||
+            src.len() < (src_stride.get() * self.scale.h1.get()) + self.scale.w1.get() - src_stride.get() ||
+            dst.len() != self.scale.w2() * self.scale.h2() {
+                return Err(Error::InvalidParameters)
+            }
         self.resample_both_axes(src, src_stride, dst)
     }
 }
@@ -375,6 +379,7 @@ impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
     /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
     #[inline]
     pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) -> Result<()> {
+        let src_stride = NonZeroUsize::new(src_stride).ok_or(Error::InvalidParameters)?;
         self.resize_internal(Format::input(src), src_stride, Format::output(dst))
     }
 }
@@ -430,6 +435,11 @@ impl fmt::Display for Error {
 #[test]
 fn oom() {
     let _ = new(2, 2, isize::max_value() as _, isize::max_value() as _, Pixel::Gray16, Type::Triangle);
+}
+
+#[test]
+fn niche() {
+    assert_eq!(std::mem::size_of::<Resizer<formats::Gray<f32, f32>>>(), std::mem::size_of::<Option<Resizer<formats::Gray<f32, f32>>>>());
 }
 
 #[test]
