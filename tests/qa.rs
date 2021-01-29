@@ -64,16 +64,16 @@ fn test_width(w2: usize) {
         res1.clear();
         res1.resize(w2 * h2, 0);
 
-        resize::new(w1, h1, w2, h2, Gray8, Lanczos3).resize(&src, &mut res1);
+        resize::new(w1, h1, w2, h2, Gray8, Lanczos3).unwrap().resize(&src, &mut res1).unwrap();
         assert_equals(&res1, w2, h2, &format!("tests/t{}x{}.png", w2, h2));
 
         res2.clear();
         res2.resize(100 * 100, 255);
 
-        resize::new(w2, h2, 100, 100, Gray8, Triangle).resize(&res1, &mut res2);
+        resize::new(w2, h2, 100, 100, Gray8, Triangle).unwrap().resize(&res1, &mut res2).unwrap();
         assert_equals(&res2, 100, 100, &format!("tests/t{}x{}-100.png", w2, h2));
 
-        resize::new(100, 100, 80, 120, Gray8, Point).resize(&res2, &mut res3);
+        resize::new(100, 100, 80, 120, Gray8, Point).unwrap().resize(&res2, &mut res3).unwrap();
         assert_equals(&res3, 80, 120, &format!("tests/t{}x{}-point.png", w2, h2));
     }
 }
@@ -105,5 +105,5 @@ fn test_w1() {
 
 #[test]
 fn can_name_type() {
-    let _: resize::Resizer<resize::formats::Gray<u8, u8>> = resize::new(10, 10, 100, 100, Gray8, Triangle);
+    let _: resize::Resizer<resize::formats::Gray<u8, u8>> = resize::new(10, 10, 100, 100, Gray8, Triangle).unwrap();
 }

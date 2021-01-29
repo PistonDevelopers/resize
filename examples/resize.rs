@@ -23,11 +23,11 @@ fn main() {
 
     assert_eq!(BitDepth::Eight, info.bit_depth);
     match info.color_type {
-        ColorType::Grayscale => resize::new(w1, h1, w2, h2, Pixel::Gray8, Triangle).resize(&src, &mut dst),
-        ColorType::RGB => resize::new(w1, h1, w2, h2, Pixel::RGB24, Triangle).resize(&src, &mut dst),
+        ColorType::Grayscale => resize::new(w1, h1, w2, h2, Pixel::Gray8, Triangle).unwrap().resize(&src, &mut dst).unwrap(),
+        ColorType::RGB => resize::new(w1, h1, w2, h2, Pixel::RGB24, Triangle).unwrap().resize(&src, &mut dst).unwrap(),
         ColorType::Indexed => unimplemented!(),
         ColorType::GrayscaleAlpha => unimplemented!(),
-        ColorType::RGBA => resize::new(w1, h1, w2, h2, Pixel::RGBA, Triangle).resize(&src, &mut dst),
+        ColorType::RGBA => resize::new(w1, h1, w2, h2, Pixel::RGBA, Triangle).unwrap().resize(&src, &mut dst).unwrap(),
     };
 
     let outfh = File::create(&args[3]).unwrap();

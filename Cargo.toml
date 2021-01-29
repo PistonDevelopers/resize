@@ -1,6 +1,6 @@
 [package]
 name = "resize"
-version = "0.5.5"
+version = "0.6.0"
 description = "Simple image resampling library in pure Rust."
 authors = ["Kornel <kornel@geekhood.net>", "Kagami Hiiragi <kagami@genshiken.org>"]
 categories = ["graphics", "multimedia::images"]
@@ -17,4 +17,5 @@ edition = "2018"
 png = "0.16.7"
 
 [dependencies]
+fallible_collections = "0.4.0"
 rgb = "0.8.24"

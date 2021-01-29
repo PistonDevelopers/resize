@@ -15,19 +15,25 @@
 //! // Destination buffer. Must be mutable.
 //! let mut dst = vec![0;w2*h2*3];
 //! // Create reusable instance.
-//! let mut resizer = resize::new(w1, h1, w2, h2, RGB24, Lanczos3);
+//! let mut resizer = resize::new(w1, h1, w2, h2, RGB24, Lanczos3)?;
 //! // Do resize without heap allocations.
 //! // Might be executed multiple times for different `src` or `dst`.
 //! resizer.resize(&src, &mut dst);
+//! # Ok::<_, resize::Error>(())
 //! ```
 // Current implementation is based on:
 // * https://github.com/sekrit-twc/zimg/tree/master/src/zimg/resize
 // * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
 #![deny(missing_docs)]
 
+use fallible_collections::FallibleVec;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::f32;
+use std::fmt;
+
+/// See [Error]
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 mod px;
 #[allow(deprecated)]
@@ -235,7 +241,10 @@ struct CoeffsLine {
 type DynCallback<'a> = &'a dyn Fn(f32) -> f32;
 
 impl Scale {
-    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type: Type) -> Self {
+    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type: Type) -> Result<Self> {
+        if source_width == 0 || source_heigth == 0 || dest_width == 0 || dest_height == 0 {
+            return Err(Error::InvalidParameters);
+        }
         let filter = match filter_type {
             Type::Point => (&point_kernel as DynCallback, 0.0_f32),
             Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
@@ -250,27 +259,28 @@ impl Scale {
         // which should save some cache space
         let mut recycled_coeffs = HashMap::new();
 
-        let coeffs_w = Self::calc_coeffs(source_width, dest_width, filter, &mut recycled_coeffs);
+        let coeffs_w = Self::calc_coeffs(source_width, dest_width, filter, &mut recycled_coeffs)?;
         let coeffs_h = if source_heigth == source_width && dest_height == dest_width {
             coeffs_w.clone()
         } else {
-            Self::calc_coeffs(source_heigth, dest_height, filter, &mut recycled_coeffs)
+            Self::calc_coeffs(source_heigth, dest_height, filter, &mut recycled_coeffs)?
         };
 
-        Self {
+        Ok(Self {
             w1: source_width,
             h1: source_heigth,
             coeffs_w,
             coeffs_h,
-        }
+        })
     }
 
-    fn calc_coeffs(s1: usize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Vec<CoeffsLine> {
+    fn calc_coeffs(s1: usize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
         let ratio = s1 as f64 / s2 as f64;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
         let filter_radius = (support as f64 * filter_scale).ceil();
-        (0..s2).map(|x2| {
+        let mut res = Vec::try_with_capacity(s2)?;
+        res.extend((0..s2).map(|x2| {
             let x1 = (x2 as f64 + 0.5) * ratio - 0.5;
             let start = (x1 - filter_radius).ceil() as isize;
             let start = start.min(s1 as isize - 1).max(0) as usize;
@@ -285,25 +295,26 @@ impl Scale {
                 }).collect::<Arc<[_]>>()
             }).clone();
             CoeffsLine { start, coeffs }
-        }).collect()
+        }));
+        Ok(res)
     }
 }
 
 impl<Format: PixelFormat> Resizer<Format> {
     /// Create a new resizer instance.
     #[inline]
-    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Self {
-        Self {
-            scale: Scale::new(source_width, source_heigth, dest_width, dest_height, filter_type),
+    pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Result<Self> {
+        Ok(Self {
+            scale: Scale::new(source_width, source_heigth, dest_width, dest_height, filter_type)?,
             tmp: Vec::new(),
             pix_fmt: pixel_format,
-        }
+        })
     }
 
     /// Stride is a length of the source row (>= W1)
-    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: usize, mut dst: &mut [Format::OutputPixel]) {
+    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: usize, mut dst: &mut [Format::OutputPixel]) -> Result<()> {
         self.tmp.clear();
-        self.tmp.reserve(self.scale.w2() * self.scale.h1);
+        FallibleVec::try_reserve(&mut self.tmp, self.scale.w2() * self.scale.h1)?;
 
         // Outer loop resamples W2xH1 to W2xH2
         let mut src_rows = src.chunks(stride);
@@ -336,11 +347,12 @@ impl<Format: PixelFormat> Resizer<Format> {
             }
             dst = &mut dst[w2..];
         }
+        Ok(())
     }
 
     /// Resize `src` image data into `dst`.
     #[inline]
-    pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) {
+    pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) -> Result<()> {
         // TODO(Kagami):
         // * Multi-thread
         // * Bound checkings
@@ -348,7 +360,7 @@ impl<Format: PixelFormat> Resizer<Format> {
         assert!(self.scale.w1 <= src_stride, "width must be smaller than stride");
         assert!(src.len() >= (src_stride * self.scale.h1) + self.scale.w1 - src_stride, "source length must be larger than area");
         assert_eq!(dst.len(), self.scale.w2() * self.scale.h2(), "destination slice must be exactly {}x{}", self.scale.w2(), self.scale.h2());
-        self.resample_both_axes(src, src_stride, dst);
+        self.resample_both_axes(src, src_stride, dst)
     }
 }
 
@@ -356,20 +368,20 @@ impl<Format: PixelFormat> Resizer<Format> {
 impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
     /// Resize `src` image data into `dst`.
     #[inline]
-    pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) {
+    pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) -> Result<()> {
         self.resize_internal(Format::input(src), self.scale.w1, Format::output(dst))
     }
 
     /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
     #[inline]
-    pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) {
+    pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) -> Result<()> {
         self.resize_internal(Format::input(src), src_stride, Format::output(dst))
     }
 }
 
 /// Create a new resizer instance. Alias for `Resizer::new`.
 #[inline(always)]
-pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Resizer<Format> {
+pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Result<Resizer<Format>> {
     Resizer::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)
 }
 
@@ -385,28 +397,67 @@ pub fn resize<Format: PixelFormatBackCompatShim>(
     src_width: usize, src_height: usize, dest_width: usize, dest_height: usize,
     pixel_format: Format, filter_type: Type,
     src: &[Format::Subpixel], dst: &mut [Format::Subpixel],
-) {
-    Resizer::<Format>::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type).resize(src, dst)
+) -> Result<()> {
+    Resizer::<Format>::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)?.resize(src, dst)
+}
+
+/// Resizing may run out of memory
+#[derive(Debug)]
+pub enum Error {
+    /// Allocation failed
+    OutOfMemory,
+    /// e.g. width or height can't be 0
+    InvalidParameters,
+}
+
+impl From<fallible_collections::TryReserveError> for Error {
+    #[inline(always)]
+    fn from(_: fallible_collections::TryReserveError) -> Self {
+        Self::OutOfMemory
+    }
+}
+
+impl fmt::Display for Error {
+    #[cold]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Self::OutOfMemory => "out of memory",
+            Self::InvalidParameters => "invalid parameters"
+        })
+    }
+}
+
+#[test]
+fn oom() {
+    let _ = new(2, 2, isize::max_value() as _, isize::max_value() as _, Pixel::Gray16, Type::Triangle);
+}
+
+#[test]
+fn zeros() {
+    assert!(new(1, 1, 1, 0, Pixel::Gray16, Type::Triangle).is_err());
+    assert!(new(1, 1, 0, 1, Pixel::Gray8, Type::Catrom).is_err());
+    assert!(new(1, 0, 1, 1, Pixel::RGBAF32, Type::Lanczos3).is_err());
+    assert!(new(0, 1, 1, 1, Pixel::RGB24, Type::Mitchell).is_err());
 }
 
 #[test]
 fn resize_stride() {
-    let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle);
+    let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle).unwrap();
     let mut dst = vec![0; 12];
     r.resize_stride(&[
         65535,65535,1,2,
         65535,65535,3,4,
-    ], 4, &mut dst);
+    ], 4, &mut dst).unwrap();
     assert_eq!(&dst, &[65535; 12]);
 }
 
 #[test]
 fn resize_float() {
-    let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle);
+    let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle).unwrap();
     let mut dst = vec![0.; 12];
     r.resize_stride(&[
         65535.,65535.,1.,2.,
         65535.,65535.,3.,4.,
-    ], 4, &mut dst);
+    ], 4, &mut dst).unwrap();
     assert_eq!(&dst, &[65535.; 12]);
 }
