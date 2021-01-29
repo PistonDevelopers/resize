@@ -415,6 +415,8 @@ pub enum Error {
     InvalidParameters,
 }
 
+impl std::error::Error for Error {}
+
 impl From<fallible_collections::TryReserveError> for Error {
     #[inline(always)]
     fn from(_: fallible_collections::TryReserveError) -> Self {
