@@ -26,9 +26,9 @@ fn precomputed_large(b: &mut Bencher) {
     let (w2, h2) = (1600, 1200);
     let mut dst = vec![120; w2 * h2];
 
-    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
+    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle).unwrap();
 
-    b.iter(|| r.resize(&src, &mut dst));
+    b.iter(|| r.resize(&src, &mut dst).unwrap());
 }
 
 #[bench]
@@ -38,12 +38,12 @@ fn tiny(b: &mut Bencher) {
     let (w1, h1) = (3200, 2400);
     let mut src1 = vec![0; w1 * h1];
 
-    resize::new(w0, h0, w1, h1, Gray8, Triangle).resize(&src0, &mut src1);
+    resize::new(w0, h0, w1, h1, Gray8, Triangle).unwrap().resize(&src0, &mut src1).unwrap();
     let (w2, h2) = (16, 12);
     let mut dst = vec![0; w2 * h2];
 
-    let mut r = resize::new(w1, h1, w2, h2, Gray8, Lanczos3);
-    b.iter(|| r.resize(&src1, &mut dst));
+    let mut r = resize::new(w1, h1, w2, h2, Gray8, Lanczos3).unwrap();
+    b.iter(|| r.resize(&src1, &mut dst).unwrap());
 }
 
 #[bench]
@@ -53,12 +53,12 @@ fn huge_stretch(b: &mut Bencher) {
     let (w1, h1) = (12, 12);
     let mut src1 = vec![0; w1 * h1];
 
-    resize::new(w0, h0, w1, h1, Gray8, Lanczos3).resize(&src0, &mut src1);
+    resize::new(w0, h0, w1, h1, Gray8, Lanczos3).unwrap().resize(&src0, &mut src1).unwrap();
     let (w2, h2) = (1200, 1200);
     let mut dst = vec![0; w2 * h2];
 
-    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
-    b.iter(|| r.resize(&src1, &mut dst));
+    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle).unwrap();
+    b.iter(|| r.resize(&src1, &mut dst).unwrap());
 }
 
 #[bench]
@@ -68,9 +68,9 @@ fn precomputed_small(b: &mut Bencher) {
     let (w2, h2) = (100, 100);
     let mut dst = vec![240; w2 * h2];
 
-    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle);
+    let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle).unwrap();
 
-    b.iter(|| r.resize(&src, &mut dst));
+    b.iter(|| r.resize(&src, &mut dst).unwrap());
 }
 
 #[bench]
@@ -81,9 +81,9 @@ fn a_small_rgb(b: &mut Bencher) {
     let (w2, h2) = (100, 100);
     let mut dst = vec![240; w2 * h2 * 3];
 
-    let mut r = resize::new(w1, h1, w2, h2, RGB24, Triangle);
+    let mut r = resize::new(w1, h1, w2, h2, RGB24, Triangle).unwrap();
 
-    b.iter(|| r.resize(rgb::ComponentSlice::as_slice(&src[..]), &mut dst));
+    b.iter(|| r.resize(rgb::ComponentSlice::as_slice(&src[..]), &mut dst).unwrap());
 }
 
 #[bench]
@@ -97,9 +97,9 @@ fn a_small_rgba16(b: &mut Bencher) {
     let (w2, h2) = (100, 100);
     let mut dst = vec![0u16; w2 * h2 * 4];
 
-    let mut r = resize::new(w1, h1, w2, h2, RGBA64, Triangle);
+    let mut r = resize::new(w1, h1, w2, h2, RGBA64, Triangle).unwrap();
 
-    b.iter(|| r.resize(rgb::ComponentSlice::as_slice(&src[..]), &mut dst));
+    b.iter(|| r.resize(rgb::ComponentSlice::as_slice(&src[..]), &mut dst).unwrap());
 }
 
 #[bench]
@@ -113,9 +113,9 @@ fn precomputed_small_16bit(b: &mut Bencher) {
         (px << 8) | px
     }).collect();
 
-    let mut r = resize::new(w1, h1, w2, h2, Gray16, Triangle);
+    let mut r = resize::new(w1, h1, w2, h2, Gray16, Triangle).unwrap();
 
-    b.iter(|| r.resize(&src, &mut dst));
+    b.iter(|| r.resize(&src, &mut dst).unwrap());
 }
 
 #[bench]
@@ -126,17 +126,17 @@ fn recomputed_small(b: &mut Bencher) {
     let (w2, h2) = (100, 100);
     let mut dst = vec![99; w2 * h2];
 
-    b.iter(|| resize::resize(w1, h1, w2, h2, Gray8, Triangle, &src, &mut dst));
+    b.iter(|| resize::resize(w1, h1, w2, h2, Gray8, Triangle, &src, &mut dst).unwrap());
 }
 
 #[bench]
 #[allow(deprecated)]
 fn init_lanczos(b: &mut Bencher) {
-    b.iter(|| resize::new(test::black_box(100), 200, test::black_box(300), 400, RGB24, Lanczos3));
+    b.iter(|| resize::new(test::black_box(100), 200, test::black_box(300), 400, RGB24, Lanczos3).unwrap());
 }
 
 #[bench]
 #[allow(deprecated)]
 fn init_point(b: &mut Bencher) {
-    b.iter(|| resize::new(test::black_box(100), 200, test::black_box(300), 400, RGB24, Point));
+    b.iter(|| resize::new(test::black_box(100), 200, test::black_box(300), 400, RGB24, Point).unwrap());
 }
