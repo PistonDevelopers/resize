@@ -28,7 +28,7 @@
 
 use fallible_collections::FallibleVec;
 use std::sync::Arc;
-use std::collections::HashMap;
+use fallible_collections::TryHashMap;
 use std::f32;
 use std::fmt;
 use std::num::NonZeroUsize;
@@ -260,7 +260,7 @@ impl Scale {
         // filters very often create repeating patterns,
         // so overall memory used by them can be reduced
         // which should save some cache space
-        let mut recycled_coeffs = HashMap::new();
+        let mut recycled_coeffs = TryHashMap::with_capacity(dest_width.max(dest_height))?;
 
         let coeffs_w = Self::calc_coeffs(source_width, dest_width, filter, &mut recycled_coeffs)?;
         let coeffs_h = if source_heigth == source_width && dest_height == dest_width {
@@ -277,13 +277,13 @@ impl Scale {
         })
     }
 
-    fn calc_coeffs(s1: NonZeroUsize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
+    fn calc_coeffs(s1: NonZeroUsize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut TryHashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
         let ratio = s1.get() as f64 / s2 as f64;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
         let filter_radius = (support as f64 * filter_scale).ceil();
         let mut res = Vec::try_with_capacity(s2)?;
-        res.extend((0..s2).map(|x2| {
+        for x2 in 0..s2 {
             let x1 = (x2 as f64 + 0.5) * ratio - 0.5;
             let start = (x1 - filter_radius).ceil() as isize;
             let start = start.min(s1.get() as isize - 1).max(0) as usize;
@@ -291,14 +291,16 @@ impl Scale {
             let end = (end.min(s1.get() as isize - 1).max(0) as usize).max(start);
             let sum: f64 = (start..=end).map(|i| (kernel)(((i as f64 - x1) / filter_scale) as f32) as f64).sum();
             let key = (end - start, (filter_scale as f32).to_ne_bytes(), (start as f32 - x1 as f32).to_ne_bytes());
-            let coeffs = recycled_coeffs.entry(key).or_insert_with(|| {
-                (start..=end).map(|i| {
+            let coeffs = if let Some(k) = recycled_coeffs.get(&key) { k.clone() } else {
+                let tmp = (start..=end).map(|i| {
                     let n = ((i as f64 - x1) / filter_scale) as f32;
                     ((kernel)(n.min(support).max(-support)) as f64 / sum) as f32
-                }).collect::<Arc<[_]>>()
-            }).clone();
-            CoeffsLine { start, coeffs }
-        }));
+                }).collect::<Arc<[_]>>();
+                recycled_coeffs.insert(key, tmp.clone())?;
+                tmp
+            };
+            res.push(CoeffsLine { start, coeffs });
+        }
         Ok(res)
     }
 }
