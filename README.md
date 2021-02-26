@@ -11,18 +11,19 @@ Image resampling library in pure Rust.
 ## Usage
 
 ```rust
-use resize::Pixel::RGB24;
+use resize::Pixel::RGB8;
 use resize::Type::Lanczos3;
 
 // Downscale by 2x.
 let (w1, h1) = (640, 480);
 let (w2, h2) = (320, 240);
-// Don't forget to fill `src` with image data (RGB24).
-let src = vec![0;w1*h1*3];
+// Don't forget to fill `src` with image data (RGB8).
+// This requires Vec<RGB<u8>>. If you have Vec<u8>, then use .as_rgb()/.as_rgb_mut() to reinterpret it as a slice of pixels.
+let src = vec![RGB::new(0,0,0); w1*h1];
 // Destination buffer. Must be mutable.
-let mut dst = vec![0;w2*h2*3];
+let mut dst = vec![RGB::new(0,0,0); w2*h2];
 // Create reusable instance.
-let mut resizer = resize::new(w1, h1, w2, h2, RGB24, Lanczos3);
+let mut resizer = resize::new(w1, h1, w2, h2, RGB8, Lanczos3);
 // Do resize without heap allocations.
 // Might be executed multiple times for different `src` or `dst`.
 resizer.resize(&src, &mut dst);

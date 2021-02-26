@@ -54,6 +54,8 @@ fn test_filter_init() {
 }
 
 fn test_width(w2: usize) {
+    use rgb::FromSlice;
+
     let tiger = &include_bytes!("../examples/tiger.png")[..];
     let (w1, h1, src) = load_png(&tiger).unwrap();
     let mut res1 = vec![];
@@ -64,16 +66,16 @@ fn test_width(w2: usize) {
         res1.clear();
         res1.resize(w2 * h2, 0);
 
-        resize::new(w1, h1, w2, h2, Gray8, Lanczos3).unwrap().resize(&src, &mut res1).unwrap();
+        resize::new(w1, h1, w2, h2, Gray8, Lanczos3).unwrap().resize(src.as_gray(), res1.as_gray_mut()).unwrap();
         assert_equals(&res1, w2, h2, &format!("tests/t{}x{}.png", w2, h2));
 
         res2.clear();
         res2.resize(100 * 100, 255);
 
-        resize::new(w2, h2, 100, 100, Gray8, Triangle).unwrap().resize(&res1, &mut res2).unwrap();
+        resize::new(w2, h2, 100, 100, Gray8, Triangle).unwrap().resize(res1.as_gray(), res2.as_gray_mut()).unwrap();
         assert_equals(&res2, 100, 100, &format!("tests/t{}x{}-100.png", w2, h2));
 
-        resize::new(100, 100, 80, 120, Gray8, Point).unwrap().resize(&res2, &mut res3).unwrap();
+        resize::new(100, 100, 80, 120, Gray8, Point).unwrap().resize(res2.as_gray(), res3.as_gray_mut()).unwrap();
         assert_equals(&res3, 80, 120, &format!("tests/t{}x{}-point.png", w2, h2));
     }
 }

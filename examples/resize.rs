@@ -4,6 +4,7 @@ use std::env;
 use std::fs::File;
 use png::ColorType;
 use png::BitDepth;
+use rgb::FromSlice;
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -23,11 +24,11 @@ fn main() {
 
     assert_eq!(BitDepth::Eight, info.bit_depth);
     match info.color_type {
-        ColorType::Grayscale => resize::new(w1, h1, w2, h2, Pixel::Gray8, Triangle).unwrap().resize(&src, &mut dst).unwrap(),
-        ColorType::RGB => resize::new(w1, h1, w2, h2, Pixel::RGB24, Triangle).unwrap().resize(&src, &mut dst).unwrap(),
+        ColorType::Grayscale => resize::new(w1, h1, w2, h2, Pixel::Gray8, Triangle).unwrap().resize(src.as_gray(), dst.as_gray_mut()).unwrap(),
+        ColorType::RGB => resize::new(w1, h1, w2, h2, Pixel::RGB8, Triangle).unwrap().resize(src.as_rgb(), dst.as_rgb_mut()).unwrap(),
         ColorType::Indexed => unimplemented!(),
         ColorType::GrayscaleAlpha => unimplemented!(),
-        ColorType::RGBA => resize::new(w1, h1, w2, h2, Pixel::RGBA, Triangle).unwrap().resize(&src, &mut dst).unwrap(),
+        ColorType::RGBA => resize::new(w1, h1, w2, h2, Pixel::RGBA8, Triangle).unwrap().resize(src.as_rgba(), dst.as_rgba_mut()).unwrap(),
     };
 
     let outfh = File::create(&args[3]).unwrap();

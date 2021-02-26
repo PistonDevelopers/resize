@@ -2,17 +2,9 @@ use crate::formats::Rgb as RgbF;
 use crate::formats::Rgba as RgbaF;
 use crate::formats::Gray as GrayF;
 
-use rgb::alt::Gray;
-use rgb::*;
-
-/// Glue for backwards compatibility with old version of the crate
-#[deprecated(note="Use APIs based on the newer PixelFormat")]
-#[doc(hidden)]
-pub trait PixelFormatBackCompatShim: PixelFormat {
-    type Subpixel: Copy;
-    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel];
-    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel];
-}
+pub use rgb::alt::Gray;
+pub use rgb::RGB;
+pub use rgb::RGBA;
 
 /// Use [`Pixel`](crate::Pixel) presets to specify pixel format.
 ///
@@ -33,18 +25,6 @@ pub trait PixelFormat {
     fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32);
     /// Finalize, convert to output pixel format
     fn into_pixel(&self, acc: Self::Accumulator) -> Self::OutputPixel;
-}
-
-#[allow(deprecated)]
-impl<F: ToFloat> PixelFormatBackCompatShim for RgbF<F, F> {
-    type Subpixel = F;
-
-    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
-        arr.as_rgb()
-    }
-    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel] {
-        arr.as_rgb_mut()
-    }
 }
 
 impl<F: ToFloat, T: ToFloat> PixelFormat for RgbF<T, F> {
@@ -78,18 +58,6 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for RgbF<T, F> {
             g: T::from_float(acc.g),
             b: T::from_float(acc.b),
         }
-    }
-}
-
-#[allow(deprecated)]
-impl<F: ToFloat> PixelFormatBackCompatShim for RgbaF<F, F> {
-    type Subpixel = F;
-
-    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
-        arr.as_rgba()
-    }
-    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel] {
-        arr.as_rgba_mut()
     }
 }
 
@@ -130,18 +98,6 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaF<T, F> {
     }
 }
 
-#[allow(deprecated)]
-impl<F: ToFloat> PixelFormatBackCompatShim for GrayF<F, F> {
-    type Subpixel = F;
-
-    fn input(arr: &[Self::Subpixel]) -> &[Self::InputPixel] {
-        arr.as_gray()
-    }
-    fn output(arr: &mut [Self::Subpixel]) -> &mut [Self::OutputPixel] {
-        arr.as_gray_mut()
-    }
-}
-
 impl<F: ToFloat, T: ToFloat> PixelFormat for GrayF<F, T> {
     type InputPixel = Gray<F>;
     type OutputPixel = Gray<T>;
@@ -168,59 +124,62 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for GrayF<F, T> {
     }
 }
 
-pub trait ToFloat: Sized + Copy + 'static {
-    fn to_float(self) -> f32;
-    fn from_float(f: f32) -> Self;
-}
-
-impl ToFloat for u8 {
-    #[inline(always)]
-    fn to_float(self) -> f32 {
-        self as f32
+use self::f::ToFloat;
+mod f {
+    pub trait ToFloat: Sized + Copy + 'static {
+        fn to_float(self) -> f32;
+        fn from_float(f: f32) -> Self;
     }
 
-    #[inline(always)]
-    fn from_float(f: f32) -> Self {
-        unsafe {
-            (0f32).max(f.round()).min(255.).to_int_unchecked()
+    impl ToFloat for u8 {
+        #[inline(always)]
+        fn to_float(self) -> f32 {
+            self as f32
+        }
+
+        #[inline(always)]
+        fn from_float(f: f32) -> Self {
+            unsafe {
+                (0f32).max(f.round()).min(255.).to_int_unchecked()
+            }
         }
     }
-}
 
-impl ToFloat for u16 {
-    #[inline(always)]
-    fn to_float(self) -> f32 {
-        self as f32
-    }
+    impl ToFloat for u16 {
+        #[inline(always)]
+        fn to_float(self) -> f32 {
+            self as f32
+        }
 
-    #[inline(always)]
-    fn from_float(f: f32) -> Self {
-        unsafe {
-            (0f32).max(f.round()).min(65535.).to_int_unchecked()
+        #[inline(always)]
+        fn from_float(f: f32) -> Self {
+            unsafe {
+                (0f32).max(f.round()).min(65535.).to_int_unchecked()
+            }
         }
     }
-}
 
-impl ToFloat for f32 {
-    #[inline(always)]
-    fn to_float(self) -> f32 {
-        self
+    impl ToFloat for f32 {
+        #[inline(always)]
+        fn to_float(self) -> f32 {
+            self
+        }
+
+        #[inline(always)]
+        fn from_float(f: f32) -> Self {
+            f
+        }
     }
 
-    #[inline(always)]
-    fn from_float(f: f32) -> Self {
-        f
-    }
-}
+    impl ToFloat for f64 {
+        #[inline(always)]
+        fn to_float(self) -> f32 {
+            self as f32
+        }
 
-impl ToFloat for f64 {
-    #[inline(always)]
-    fn to_float(self) -> f32 {
-        self as f32
-    }
-
-    #[inline(always)]
-    fn from_float(f: f32) -> Self {
-        f as f64
+        #[inline(always)]
+        fn from_float(f: f32) -> Self {
+            f as f64
+        }
     }
 }

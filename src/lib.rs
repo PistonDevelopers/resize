@@ -3,22 +3,23 @@
 //! # Examples
 //!
 //! ```
-//! use resize::Pixel::RGB24;
+//! use resize::Pixel::RGB8;
 //! use resize::Type::Lanczos3;
 //! use rgb::RGB8;
+//! use rgb::FromSlice;
 //!
 //! // Downscale by 2x.
 //! let (w1, h1) = (640, 480);
 //! let (w2, h2) = (320, 240);
-//! // Don't forget to fill `src` with image data (RGB24).
+//! // Don't forget to fill `src` with image data (RGB8).
 //! let src = vec![0;w1*h1*3];
 //! // Destination buffer. Must be mutable.
 //! let mut dst = vec![0;w2*h2*3];
 //! // Create reusable instance.
-//! let mut resizer = resize::new(w1, h1, w2, h2, RGB24, Lanczos3)?;
+//! let mut resizer = resize::new(w1, h1, w2, h2, RGB8, Lanczos3)?;
 //! // Do resize without heap allocations.
 //! // Might be executed multiple times for different `src` or `dst`.
-//! resizer.resize(&src, &mut dst);
+//! resizer.resize(src.as_rgb(), dst.as_rgb_mut());
 //! # Ok::<_, resize::Error>(())
 //! ```
 // Current implementation is based on:
@@ -36,11 +37,8 @@ use std::num::NonZeroUsize;
 /// See [Error]
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-mod px;
-#[allow(deprecated)]
-use px::PixelFormatBackCompatShim;
-
-#[doc(hidden)]
+/// Pixel format from the [rgb] crate.
+pub mod px;
 pub use px::PixelFormat;
 
 /// Resizing type to use.
@@ -155,6 +153,7 @@ pub mod Pixel {
     use crate::formats;
 
     /// Grayscale, 8-bit.
+    #[doc(alias = "Grey")]
     pub const Gray8: formats::Gray<u8, u8> = formats::Gray(PhantomData);
     /// Grayscale, 16-bit, native endian.
     pub const Gray16: formats::Gray<u16, u16> = formats::Gray(PhantomData);
@@ -165,13 +164,17 @@ pub mod Pixel {
     pub const GrayF64: formats::Gray<f64, f64> = formats::Gray(PhantomData);
 
     /// RGB, 8-bit per component.
-    pub const RGB24: formats::Rgb<u8, u8> = formats::Rgb(PhantomData);
+    #[doc(alias = "RGB24")]
+    pub const RGB8: formats::Rgb<u8, u8> = formats::Rgb(PhantomData);
     /// RGB, 16-bit per component, native endian.
-    pub const RGB48: formats::Rgb<u16, u16> = formats::Rgb(PhantomData);
+    #[doc(alias = "RGB48")]
+    pub const RGB16: formats::Rgb<u16, u16> = formats::Rgb(PhantomData);
     /// RGBA, 8-bit per component.
-    pub const RGBA: formats::Rgba<u8, u8> = formats::Rgba(PhantomData);
+    #[doc(alias = "RGBA32")]
+    pub const RGBA8: formats::Rgba<u8, u8> = formats::Rgba(PhantomData);
     /// RGBA, 16-bit per component, native endian.
-    pub const RGBA64: formats::Rgba<u16, u16> = formats::Rgba(PhantomData);
+    #[doc(alias = "RGBA64")]
+    pub const RGBA16: formats::Rgba<u16, u16> = formats::Rgba(PhantomData);
 
     /// RGB, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
     pub const RGBF32: formats::Rgb<f32, f32> = formats::Rgb(PhantomData);
@@ -370,19 +373,18 @@ impl<Format: PixelFormat> Resizer<Format> {
     }
 }
 
-#[allow(deprecated)]
-impl<Format: PixelFormatBackCompatShim> Resizer<Format> {
+impl<Format: PixelFormat> Resizer<Format> {
     /// Resize `src` image data into `dst`.
     #[inline]
-    pub fn resize(&mut self, src: &[Format::Subpixel], dst: &mut [Format::Subpixel]) -> Result<()> {
-        self.resize_internal(Format::input(src), self.scale.w1, Format::output(dst))
+    pub fn resize(&mut self, src: &[Format::InputPixel], dst: &mut [Format::OutputPixel]) -> Result<()> {
+        self.resize_internal(src, self.scale.w1, dst)
     }
 
     /// Resize `src` image data into `dst`, skipping `stride` pixels each row.
     #[inline]
-    pub fn resize_stride(&mut self, src: &[Format::Subpixel], src_stride: usize, dst: &mut [Format::Subpixel]) -> Result<()> {
+    pub fn resize_stride(&mut self, src: &[Format::InputPixel], src_stride: usize, dst: &mut [Format::OutputPixel]) -> Result<()> {
         let src_stride = NonZeroUsize::new(src_stride).ok_or(Error::InvalidParameters)?;
-        self.resize_internal(Format::input(src), src_stride, Format::output(dst))
+        self.resize_internal(src, src_stride, dst)
     }
 }
 
@@ -400,10 +402,10 @@ pub fn new<Format: PixelFormat>(src_width: usize, src_height: usize, dest_width:
 /// consider creating an resizer instance since it's faster.
 #[deprecated(note="Use resize::new().resize()")]
 #[allow(deprecated)]
-pub fn resize<Format: PixelFormatBackCompatShim>(
+pub fn resize<Format: PixelFormat>(
     src_width: usize, src_height: usize, dest_width: usize, dest_height: usize,
     pixel_format: Format, filter_type: Type,
-    src: &[Format::Subpixel], dst: &mut [Format::Subpixel],
+    src: &[Format::InputPixel], dst: &mut [Format::OutputPixel],
 ) -> Result<()> {
     Resizer::<Format>::new(src_width, src_height, dest_width, dest_height, pixel_format, filter_type)?.resize(src, dst)
 }
@@ -451,27 +453,31 @@ fn zeros() {
     assert!(new(1, 1, 1, 0, Pixel::Gray16, Type::Triangle).is_err());
     assert!(new(1, 1, 0, 1, Pixel::Gray8, Type::Catrom).is_err());
     assert!(new(1, 0, 1, 1, Pixel::RGBAF32, Type::Lanczos3).is_err());
-    assert!(new(0, 1, 1, 1, Pixel::RGB24, Type::Mitchell).is_err());
+    assert!(new(0, 1, 1, 1, Pixel::RGB8, Type::Mitchell).is_err());
 }
 
 #[test]
 fn resize_stride() {
+    use rgb::FromSlice;
+
     let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle).unwrap();
     let mut dst = vec![0; 12];
     r.resize_stride(&[
         65535,65535,1,2,
         65535,65535,3,4,
-    ], 4, &mut dst).unwrap();
+    ].as_gray(), 4, dst.as_gray_mut()).unwrap();
     assert_eq!(&dst, &[65535; 12]);
 }
 
 #[test]
 fn resize_float() {
+    use rgb::FromSlice;
+
     let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle).unwrap();
     let mut dst = vec![0.; 12];
     r.resize_stride(&[
         65535.,65535.,1.,2.,
         65535.,65535.,3.,4.,
-    ], 4, &mut dst).unwrap();
+    ].as_gray(), 4, dst.as_gray_mut()).unwrap();
     assert_eq!(&dst, &[65535.; 12]);
 }
