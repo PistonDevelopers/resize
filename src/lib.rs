@@ -169,12 +169,26 @@ pub mod Pixel {
     /// RGB, 16-bit per component, native endian.
     #[doc(alias = "RGB48")]
     pub const RGB16: formats::Rgb<u16, u16> = formats::Rgb(PhantomData);
-    /// RGBA, 8-bit per component.
+    /// RGBA, 8-bit per component. Components are scaled independently. Use this if the input is already alpha-premultiplied.
+    ///
+    /// Preserves RGB values of fully-transparent pixels. Expect halos around edges of transparency if using regular, uncorrelated RGBA. See [RGBA8P].
     #[doc(alias = "RGBA32")]
     pub const RGBA8: formats::Rgba<u8, u8> = formats::Rgba(PhantomData);
-    /// RGBA, 16-bit per component, native endian.
+    /// RGBA, 16-bit per component, native endian. Components are scaled independently. Use this if the input is already alpha-premultiplied.
+    ///
+    /// Preserves RGB values of fully-transparent pixels. Expect halos around edges of transparency if using regular, uncorrelated RGBA. See [RGBA16P].
     #[doc(alias = "RGBA64")]
     pub const RGBA16: formats::Rgba<u16, u16> = formats::Rgba(PhantomData);
+    /// RGBA, 8-bit per component. RGB components will be converted to premultiplied during scaling, and then converted back to uncorrelated.
+    ///
+    /// Clears "dirty alpha". Use this for high-quality scaling of regular uncorrelated (not premultiplied) RGBA bitmaps.
+    #[doc(alias = "premultiplied")]
+    #[doc(alias = "prem")]
+    pub const RGBA8P: formats::RgbaPremultiply<u8, u8> = formats::RgbaPremultiply(PhantomData);
+    /// RGBA, 16-bit per component, native endian. RGB components will be converted to premultiplied during scaling, and then converted back to uncorrelated.
+    ///
+    /// Clears "dirty alpha". Use this for high-quality scaling of regular uncorrelated (not premultiplied) RGBA bitmaps.
+    pub const RGBA16P: formats::RgbaPremultiply<u16, u16> = formats::RgbaPremultiply(PhantomData);
 
     /// RGB, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
     pub const RGBF32: formats::Rgb<f32, f32> = formats::Rgb(PhantomData);
@@ -182,8 +196,12 @@ pub mod Pixel {
     pub const RGBF64: formats::Rgb<f64, f64> = formats::Rgb(PhantomData);
 
     /// RGBA, 32-bit float per component. This is pretty efficient, since resizing uses f32 internally.
+    ///
+    /// Components are scaled independently (no premultiplication applied)
     pub const RGBAF32: formats::Rgba<f32, f32> = formats::Rgba(PhantomData);
     /// RGBA, 64-bit double per component.
+    ///
+    /// Components are scaled independently (no premultiplication applied)
     pub const RGBAF64: formats::Rgba<f64, f64> = formats::Rgba(PhantomData);
 }
 
@@ -196,9 +214,12 @@ pub mod formats {
     /// RGB pixels
     #[derive(Debug, Copy, Clone)]
     pub struct Rgb<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
-    /// RGBA pixels
+    /// RGBA pixels, each channel is independent. Compatible with premultiplied input/output.
     #[derive(Debug, Copy, Clone)]
     pub struct Rgba<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
+    /// Apply premultiplication to RGBA pixels during scaling. Assumes **non**-premultiplied input/output.
+    #[derive(Debug, Copy, Clone)]
+    pub struct RgbaPremultiply<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
     /// Grayscale pixels
     #[derive(Debug, Copy, Clone)]
     pub struct Gray<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
@@ -454,6 +475,40 @@ fn zeros() {
     assert!(new(1, 1, 0, 1, Pixel::Gray8, Type::Catrom).is_err());
     assert!(new(1, 0, 1, 1, Pixel::RGBAF32, Type::Lanczos3).is_err());
     assert!(new(0, 1, 1, 1, Pixel::RGB8, Type::Mitchell).is_err());
+}
+
+#[test]
+fn premultiply() {
+    use px::RGBA;
+    let mut r = new(2, 2, 3, 4, Pixel::RGBA8P, Type::Triangle).unwrap();
+    let mut dst = vec![RGBA::new(0u8,0,0,0u8); 12];
+    r.resize(&[
+        RGBA::new(255,127,3,255), RGBA::new(0,0,0,0),
+        RGBA::new(255,255,255,0), RGBA::new(0,255,255,0),
+    ], &mut dst).unwrap();
+    assert_eq!(&dst, &[
+        RGBA { r: 255, g: 127, b: 3, a: 255 }, RGBA { r: 255, g: 127, b: 3, a: 128 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
+        RGBA { r: 255, g: 127, b: 3, a: 191 }, RGBA { r: 255, g: 127, b: 3, a: 96 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
+        RGBA { r: 255, g: 127, b: 3, a: 64 }, RGBA { r: 255, g: 127, b: 3, a: 32 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
+        RGBA { r: 0, g: 0, b: 0, a: 0 }, RGBA { r: 0, g: 0, b: 0, a: 0 }, RGBA { r: 0, g: 0, b: 0, a: 0 }
+    ]);
+}
+
+#[test]
+fn premultiply_solid() {
+    use px::RGBA;
+    let mut r = new(2, 2, 3, 4, Pixel::RGBA8P, Type::Triangle).unwrap();
+    let mut dst = vec![RGBA::new(0u8,0,0,0u8); 12];
+    r.resize(&[
+        RGBA::new(255,255,255,255), RGBA::new(0,0,0,255),
+        RGBA::new(0,0,0,255), RGBA::new(0,0,0,255),
+    ], &mut dst).unwrap();
+    assert_eq!(&dst, &[
+        RGBA { r: 255, g: 255, b: 255, a: 255 }, RGBA { r: 128, g: 128, b: 128, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+        RGBA { r: 191, g: 191, b: 191, a: 255 }, RGBA { r: 96, g: 96, b: 96, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+        RGBA { r: 64, g: 64, b: 64, a: 255 }, RGBA { r: 32, g: 32, b: 32, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+        RGBA { r: 0, g: 0, b: 0, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+    ]);
 }
 
 #[test]

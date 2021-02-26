@@ -4,7 +4,7 @@ extern crate test;
 use rgb::FromSlice;
 use test::Bencher;
 
-use resize::Pixel::{Gray16, Gray8, RGB8, RGBA16};
+use resize::Pixel::{Gray16, Gray8, RGB8, RGBA16, RGBA16P};
 use resize::Type::Triangle;
 use resize::Type::Lanczos3;
 use resize::Type::Point;
@@ -99,6 +99,22 @@ fn a_small_rgba16(b: &mut Bencher) {
     let mut dst = vec![0u16; w2 * h2 * 4];
 
     let mut r = resize::new(w1, h1, w2, h2, RGBA16, Triangle).unwrap();
+
+    b.iter(|| r.resize(&src, dst.as_rgba_mut()).unwrap());
+}
+
+#[bench]
+fn a_small_rgba16_premultiplied(b: &mut Bencher) {
+    let (info, src) = get_image();
+    let src: Vec<_> = src.into_iter().map(|c| {
+        let w = ((c as u16) << 8) | c as u16;
+        rgb::RGBA::new(w,w,w,65535)
+    }).collect();
+    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w2, h2) = (100, 100);
+    let mut dst = vec![0u16; w2 * h2 * 4];
+
+    let mut r = resize::new(w1, h1, w2, h2, RGBA16P, Triangle).unwrap();
 
     b.iter(|| r.resize(&src, dst.as_rgba_mut()).unwrap());
 }

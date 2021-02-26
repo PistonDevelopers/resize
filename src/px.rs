@@ -1,7 +1,4 @@
-use crate::formats::Rgb as RgbF;
-use crate::formats::Rgba as RgbaF;
-use crate::formats::Gray as GrayF;
-
+use crate::formats;
 pub use rgb::alt::Gray;
 pub use rgb::RGB;
 pub use rgb::RGBA;
@@ -27,7 +24,7 @@ pub trait PixelFormat {
     fn into_pixel(&self, acc: Self::Accumulator) -> Self::OutputPixel;
 }
 
-impl<F: ToFloat, T: ToFloat> PixelFormat for RgbF<T, F> {
+impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Rgb<T, F> {
     type InputPixel = RGB<F>;
     type OutputPixel = RGB<T>;
     type Accumulator = RGB<f32>;
@@ -61,7 +58,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for RgbF<T, F> {
     }
 }
 
-impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaF<T, F> {
+impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Rgba<T, F> {
     type InputPixel = RGBA<F>;
     type OutputPixel = RGBA<T>;
     type Accumulator = RGBA<f32>;
@@ -98,7 +95,51 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for RgbaF<T, F> {
     }
 }
 
-impl<F: ToFloat, T: ToFloat> PixelFormat for GrayF<F, T> {
+impl<F: ToFloat, T: ToFloat> PixelFormat for formats::RgbaPremultiply<T, F> {
+    type InputPixel = RGBA<F>;
+    type OutputPixel = RGBA<T>;
+    type Accumulator = RGBA<f32>;
+
+    #[inline(always)]
+    fn new() -> Self::Accumulator {
+        RGBA::new(0.,0.,0.,0.)
+    }
+
+    #[inline(always)]
+    fn add(&self, acc: &mut Self::Accumulator, inp: RGBA<F>, coeff: f32) {
+        let a_coeff = inp.a.to_float() * coeff;
+        acc.r += inp.r.to_float() * a_coeff;
+        acc.g += inp.g.to_float() * a_coeff;
+        acc.b += inp.b.to_float() * a_coeff;
+        acc.a += a_coeff;
+    }
+
+    #[inline(always)]
+    fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32) {
+        acc.r += inp.r * coeff;
+        acc.g += inp.g * coeff;
+        acc.b += inp.b * coeff;
+        acc.a += inp.a * coeff;
+    }
+
+    #[inline(always)]
+    fn into_pixel(&self, acc: Self::Accumulator) -> RGBA<T> {
+        if acc.a > 0. {
+            let inv = 1.0 / acc.a;
+            RGBA {
+                r: T::from_float(acc.r * inv),
+                g: T::from_float(acc.g * inv),
+                b: T::from_float(acc.b * inv),
+                a: T::from_float(acc.a),
+            }
+        } else {
+            let zero = T::from_float(0.);
+            RGBA::new(zero, zero, zero, zero)
+        }
+    }
+}
+
+impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Gray<F, T> {
     type InputPixel = Gray<F>;
     type OutputPixel = Gray<T>;
     type Accumulator = Gray<f32>;
@@ -126,6 +167,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for GrayF<F, T> {
 
 use self::f::ToFloat;
 mod f {
+    /// Internal, please don't use
     pub trait ToFloat: Sized + Copy + 'static {
         fn to_float(self) -> f32;
         fn from_float(f: f32) -> Self;
