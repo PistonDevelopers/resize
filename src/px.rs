@@ -224,6 +224,19 @@ mod f {
             f as f64
         }
     }
+
+    // Inherent methods are preferred over traits, so this won't be used in newer rust
+    trait OldRustWorkaround<T> {
+        unsafe fn to_int_unchecked(self) -> T;
+    }
+
+    impl OldRustWorkaround<u16> for f32 {
+        unsafe fn to_int_unchecked(self) -> u16 { self as u16 }
+    }
+
+    impl OldRustWorkaround<u8> for f32 {
+        unsafe fn to_int_unchecked(self) -> u8 { self as u8 }
+    }
 }
 
 // Inherent methods are preferred over traits, so this won't be used in newer rust

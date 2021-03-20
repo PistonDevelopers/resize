@@ -153,7 +153,7 @@ pub mod Pixel {
     use crate::formats;
 
     /// Grayscale, 8-bit.
-    #[doc(alias = "Grey")]
+    #[cfg_attr(docsrs, doc(alias = "Grey"))]
     pub const Gray8: formats::Gray<u8, u8> = formats::Gray(PhantomData);
     /// Grayscale, 16-bit, native endian.
     pub const Gray16: formats::Gray<u16, u16> = formats::Gray(PhantomData);
@@ -164,26 +164,26 @@ pub mod Pixel {
     pub const GrayF64: formats::Gray<f64, f64> = formats::Gray(PhantomData);
 
     /// RGB, 8-bit per component.
-    #[doc(alias = "RGB24")]
+    #[cfg_attr(docsrs, doc(alias = "RGB24"))]
     pub const RGB8: formats::Rgb<u8, u8> = formats::Rgb(PhantomData);
     /// RGB, 16-bit per component, native endian.
-    #[doc(alias = "RGB48")]
+    #[cfg_attr(docsrs, doc(alias = "RGB48"))]
     pub const RGB16: formats::Rgb<u16, u16> = formats::Rgb(PhantomData);
     /// RGBA, 8-bit per component. Components are scaled independently. Use this if the input is already alpha-premultiplied.
     ///
     /// Preserves RGB values of fully-transparent pixels. Expect halos around edges of transparency if using regular, uncorrelated RGBA. See [RGBA8P].
-    #[doc(alias = "RGBA32")]
+    #[cfg_attr(docsrs, doc(alias = "RGBA32"))]
     pub const RGBA8: formats::Rgba<u8, u8> = formats::Rgba(PhantomData);
     /// RGBA, 16-bit per component, native endian. Components are scaled independently. Use this if the input is already alpha-premultiplied.
     ///
     /// Preserves RGB values of fully-transparent pixels. Expect halos around edges of transparency if using regular, uncorrelated RGBA. See [RGBA16P].
-    #[doc(alias = "RGBA64")]
+    #[cfg_attr(docsrs, doc(alias = "RGBA64"))]
     pub const RGBA16: formats::Rgba<u16, u16> = formats::Rgba(PhantomData);
     /// RGBA, 8-bit per component. RGB components will be converted to premultiplied during scaling, and then converted back to uncorrelated.
     ///
     /// Clears "dirty alpha". Use this for high-quality scaling of regular uncorrelated (not premultiplied) RGBA bitmaps.
-    #[doc(alias = "premultiplied")]
-    #[doc(alias = "prem")]
+    #[cfg_attr(docsrs, doc(alias = "premultiplied"))]
+    #[cfg_attr(docsrs, doc(alias = "prem"))]
     pub const RGBA8P: formats::RgbaPremultiply<u8, u8> = formats::RgbaPremultiply(PhantomData);
     /// RGBA, 16-bit per component, native endian. RGB components will be converted to premultiplied during scaling, and then converted back to uncorrelated.
     ///
