@@ -14,11 +14,11 @@ include = ["Cargo.toml", "README.md", "LICENSE", "src/*.rs"]
 edition = "2018"
 
 [dev-dependencies]
-png = "0.16.7"
+png = "0.17.2"
 
 [dependencies]
-fallible_collections = "0.4.0"
-rgb = "0.8.24"
+fallible_collections = "0.4.4"
+rgb = "0.8.31"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

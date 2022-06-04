@@ -5,11 +5,14 @@ use std::path::Path;
 
 fn load_png(mut data: &[u8]) -> Result<(usize, usize, Vec<u8>), png::DecodingError> {
     let decoder = png::Decoder::new(&mut data);
-    let (info, mut reader) = decoder.read_info()?;
-    let mut src = vec![0; info.buffer_size()];
+    let mut reader = decoder.read_info()?;
+    let info = reader.info();
+    let w = info.width as usize;
+    let h = info.height as usize;
+    let mut src = vec![0; reader.output_buffer_size()];
     reader.next_frame(&mut src)?;
 
-    Ok((info.width as usize, info.height as usize, src))
+    Ok((w, h, src))
 }
 
 fn write_png(path: &Path, w2: usize, h2: usize, pixels: &[u8]) {

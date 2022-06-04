@@ -11,19 +11,20 @@ use resize::Type::Point;
 use std::fs::File;
 use std::path::PathBuf;
 
-fn get_image() -> (png::OutputInfo, Vec<u8>) {
+fn get_image() -> (u32, u32, Vec<u8>) {
     let root: PathBuf = env!("CARGO_MANIFEST_DIR").into();
     let decoder = png::Decoder::new(File::open(root.join("examples/tiger.png")).unwrap());
-    let (info, mut reader) = decoder.read_info().unwrap();
-    let mut src = vec![110; info.buffer_size()];
+    let mut reader = decoder.read_info().unwrap();
+    let (width, height) = reader.info().size();
+    let mut src = vec![110; reader.output_buffer_size()];
     reader.next_frame(&mut src).unwrap();
-    (info, src)
+    (width, height, src)
 }
 
 #[bench]
 fn precomputed_large(b: &mut Bencher) {
-    let (info, src) = get_image();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (width, height, src) = get_image();
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (1600, 1200);
     let mut dst = vec![120; w2 * h2];
 
@@ -34,8 +35,8 @@ fn precomputed_large(b: &mut Bencher) {
 
 #[bench]
 fn tiny(b: &mut Bencher) {
-    let (info, src0) = get_image();
-    let (w0, h0) = (info.width as usize, info.height as usize);
+    let (width, height, src0) = get_image();
+    let (w0, h0) = (width as usize, height as usize);
     let (w1, h1) = (3200, 2400);
     let mut src1 = vec![0; w1 * h1];
 
@@ -49,8 +50,8 @@ fn tiny(b: &mut Bencher) {
 
 #[bench]
 fn huge_stretch(b: &mut Bencher) {
-    let (info, src0) = get_image();
-    let (w0, h0) = (info.width as usize, info.height as usize);
+    let (width, height, src0) = get_image();
+    let (w0, h0) = (width as usize, height as usize);
     let (w1, h1) = (12, 12);
     let mut src1 = vec![0; w1 * h1];
 
@@ -64,8 +65,8 @@ fn huge_stretch(b: &mut Bencher) {
 
 #[bench]
 fn precomputed_small(b: &mut Bencher) {
-    let (info, src) = get_image();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (width, height, src) = get_image();
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100, 100);
     let mut dst = vec![240; w2 * h2];
 
@@ -76,9 +77,9 @@ fn precomputed_small(b: &mut Bencher) {
 
 #[bench]
 fn a_small_rgb(b: &mut Bencher) {
-    let (info, src) = get_image();
+    let (width, height, src) = get_image();
     let src: Vec<_> = src.into_iter().map(|c| rgb::RGB::new(c,c,c)).collect();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100, 100);
     let mut dst = vec![240; w2 * h2 * 3];
 
@@ -89,12 +90,12 @@ fn a_small_rgb(b: &mut Bencher) {
 
 #[bench]
 fn a_small_rgba16(b: &mut Bencher) {
-    let (info, src) = get_image();
+    let (width, height, src) = get_image();
     let src: Vec<_> = src.into_iter().map(|c| {
         let w = ((c as u16) << 8) | c as u16;
         rgb::RGBA::new(w,w,w,65535)
     }).collect();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100, 100);
     let mut dst = vec![0u16; w2 * h2 * 4];
 
@@ -105,12 +106,12 @@ fn a_small_rgba16(b: &mut Bencher) {
 
 #[bench]
 fn a_small_rgba16_premultiplied(b: &mut Bencher) {
-    let (info, src) = get_image();
+    let (width, height, src) = get_image();
     let src: Vec<_> = src.into_iter().map(|c| {
         let w = ((c as u16) << 8) | c as u16;
         rgb::RGBA::new(w,w,w,65535)
     }).collect();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100, 100);
     let mut dst = vec![0u16; w2 * h2 * 4];
 
@@ -121,8 +122,8 @@ fn a_small_rgba16_premultiplied(b: &mut Bencher) {
 
 #[bench]
 fn precomputed_small_16bit(b: &mut Bencher) {
-    let (info, src) = get_image();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (width, height, src) = get_image();
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100,100);
     let mut dst = vec![33; w2*h2];
     let src: Vec<_> = src.into_iter().map(|px|{
@@ -138,8 +139,8 @@ fn precomputed_small_16bit(b: &mut Bencher) {
 #[bench]
 #[allow(deprecated)]
 fn recomputed_small(b: &mut Bencher) {
-    let (info, src) = get_image();
-    let (w1, h1) = (info.width as usize, info.height as usize);
+    let (width, height, src) = get_image();
+    let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100, 100);
     let mut dst = vec![99; w2 * h2];
 
