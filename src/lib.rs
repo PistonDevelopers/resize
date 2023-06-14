@@ -444,13 +444,6 @@ pub enum Error {
 
 impl std::error::Error for Error {}
 
-impl From<fallible_collections::TryReserveError> for Error {
-    #[inline(always)]
-    fn from(_: fallible_collections::TryReserveError) -> Self {
-        Self::OutOfMemory
-    }
-}
-
 impl From<std::collections::TryReserveError> for Error {
     #[inline(always)]
     fn from(_: std::collections::TryReserveError) -> Self {
