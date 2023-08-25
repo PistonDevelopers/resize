@@ -409,9 +409,9 @@ impl<Format: PixelFormat> Resizer<Format> {
             .collect();
 
         // Vertical Resampling
-        let results: Vec<_> = self.scale.coeffs_h.par_iter().flat_map_iter(|row| {
+        let results: Vec<_> = self.scale.coeffs_h.par_iter().flat_map(|row| {
             let tmp_rows = &tmp[w2 * row.start..];
-            (0..w2).map(|col| {
+            (0..w2).into_par_iter().map(|col| {
                 let mut accum = Format::new();
                 for (coeff, other_row) in row.coeffs.iter().copied().zip(tmp_rows.chunks_exact(w2)) {
                     Format::add_acc(&mut accum, other_row[col], coeff);
