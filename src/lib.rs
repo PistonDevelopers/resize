@@ -33,6 +33,9 @@ use std::f32;
 use std::fmt;
 use std::num::NonZeroUsize;
 
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
+
 /// See [Error]
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -231,6 +234,7 @@ pub struct Resizer<Format: PixelFormat> {
     scale: Scale,
     pix_fmt: Format,
     // Temporary/preallocated stuff.
+    #[cfg(not(feature = "rayon"))]
     tmp: Vec<Format::Accumulator>,
 }
 
@@ -337,12 +341,15 @@ impl<Format: PixelFormat> Resizer<Format> {
     pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Result<Self> {
         Ok(Self {
             scale: Scale::new(source_width, source_heigth, dest_width, dest_height, filter_type)?,
-            tmp: Vec::new(),
             pix_fmt: pixel_format,
+            #[cfg(not(feature = "rayon"))]
+            tmp: Vec::new(),
         })
     }
 
+
     /// Stride is a length of the source row (>= W1)
+    #[cfg(not(feature = "rayon"))]
     fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, mut dst: &mut [Format::OutputPixel]) -> Result<()> {
         self.tmp.clear();
         self.tmp.try_reserve(self.scale.w2() * self.scale.h1.get())?;
@@ -381,12 +388,46 @@ impl<Format: PixelFormat> Resizer<Format> {
         Ok(())
     }
 
+    #[cfg(feature = "rayon")]
+    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
+        let w2 = self.scale.w2();
+        let stride = stride.get();
+        let pix_fmt = &self.pix_fmt;
+
+        // Horizontal Resampling
+        let tmp: Vec<_> = src.par_chunks(stride)
+            .flat_map(|row| {
+                self.scale.coeffs_w.par_iter().map(move |col| {
+                    let mut accum = Format::new();
+                    let in_px = &row[col.start..col.start + col.coeffs.len()];
+                    for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
+                        pix_fmt.add(&mut accum, in_px, coeff);
+                    }
+                    accum
+                })
+            })
+            .collect();
+
+        // Vertical Resampling
+        let results: Vec<_> = self.scale.coeffs_h.par_iter().flat_map_iter(|row| {
+            let tmp_rows = &tmp[w2 * row.start..];
+            (0..w2).map(|col| {
+                let mut accum = Format::new();
+                for (coeff, other_row) in row.coeffs.iter().copied().zip(tmp_rows.chunks_exact(w2)) {
+                    Format::add_acc(&mut accum, other_row[col], coeff);
+                }
+                pix_fmt.into_pixel(accum)
+            })
+        })
+        .collect();
+
+        dst.copy_from_slice(&results);
+        Ok(())
+    }
+
     /// Resize `src` image data into `dst`.
     #[inline]
     pub(crate) fn resize_internal(&mut self, src: &[Format::InputPixel], src_stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
-        // TODO(Kagami):
-        // * Multi-thread
-        // * SIMD
         if self.scale.w1.get() > src_stride.get() ||
             src.len() < (src_stride.get() * self.scale.h1.get()) + self.scale.w1.get() - src_stride.get() ||
             dst.len() != self.scale.w2() * self.scale.h2() {
