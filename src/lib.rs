@@ -409,11 +409,11 @@ impl<Format: PixelFormat> Resizer<Format> {
         // Horizontal Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
         src.par_chunks(stride).enumerate().for_each(|(y, row)| {
-            // Acquire a safe reference to the current position in the temporary buffer.
-            let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
-
             // For each pixel in the row, calculate the horizontal resampling and store the result.
-            for (x, col) in self.scale.coeffs_w.iter().enumerate() {
+            self.scale.coeffs_w.par_iter().enumerate().for_each(|(x, col)| {
+                // Acquire a safe reference to the current position in the temporary buffer.
+                let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
+
                 let mut accum = Format::new();
                 let in_px = &row[col.start..col.start + col.coeffs.len()];
                 for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
@@ -426,21 +426,21 @@ impl<Format: PixelFormat> Resizer<Format> {
                 unsafe {
                     *tmp_raw_ptr.add(pixel_offset) = accum;
                 }
-            }
+            });
         });
 
         // Vertical Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
         let dst_ptr = AtomicPtr::new(dst.as_mut_ptr());
         self.scale.coeffs_h.par_iter().enumerate().for_each(|(y, row)| {
-            // Acquire a safe reference to the current position in the temporary buffer.
-            let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
-
-            // Determine the start of the current row in the temporary buffer.
-            let tmp_row_start = unsafe { tmp_raw_ptr.add(w2 * row.start) };
-
             // For each pixel in the row, calculate the vertical resampling and store the result directly into the destination buffer.
-            for x in 0..w2 {
+             (0..w2).into_par_iter().for_each(|x| {
+                // Acquire a safe reference to the current position in the temporary buffer.
+                let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
+
+                // Determine the start of the current row in the temporary buffer.
+                let tmp_row_start = unsafe { tmp_raw_ptr.add(w2 * row.start) };
+
                 let mut accum = Format::new();
                 for (coeff_idx, coeff) in row.coeffs.iter().copied().enumerate() {
                     // Calculate the appropriate pixel location based on the coefficient index.
@@ -455,7 +455,7 @@ impl<Format: PixelFormat> Resizer<Format> {
                 unsafe {
                     *raw_ptr.add(y * w2 + x) = pix_fmt.into_pixel(accum);
                 }
-            }
+            });
         });
 
         Ok(())
