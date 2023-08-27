@@ -234,7 +234,6 @@ pub struct Resizer<Format: PixelFormat> {
     scale: Scale,
     pix_fmt: Format,
     // Temporary/preallocated stuff.
-    #[cfg(not(feature = "rayon"))]
     tmp: Vec<Format::Accumulator>,
 }
 
@@ -341,12 +340,10 @@ impl<Format: PixelFormat> Resizer<Format> {
     pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, pixel_format: Format, filter_type: Type) -> Result<Self> {
         Ok(Self {
             scale: Scale::new(source_width, source_heigth, dest_width, dest_height, filter_type)?,
-            pix_fmt: pixel_format,
-            #[cfg(not(feature = "rayon"))]
             tmp: Vec::new(),
+            pix_fmt: pixel_format,
         })
     }
-
 
     /// Stride is a length of the source row (>= W1)
     #[cfg(not(feature = "rayon"))]
@@ -390,38 +387,77 @@ impl<Format: PixelFormat> Resizer<Format> {
 
     #[cfg(feature = "rayon")]
     fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
-        let w2 = self.scale.w2();
+        use std::sync::atomic::AtomicPtr;
+
         let stride = stride.get();
         let pix_fmt = &self.pix_fmt;
+        let w2 = self.scale.w2();
+        let h2 = self.scale.h2();
+
+        // Ensure the destination buffer has adequate size for the resampling operation.
+        if dst.len() < w2 * h2 {
+            return Err(Error::InvalidParameters);
+        }
+
+        // Prepare the temporary buffer for intermediate storage.
+        self.tmp.clear();
+        self.tmp.try_reserve(self.scale.w2() * self.scale.h1.get())?;
+
+        // Initialize an atomic pointer for safe multithreaded access.
+        let tmp_ptr = AtomicPtr::new(self.tmp.as_mut_ptr());
 
         // Horizontal Resampling
-        let tmp: Vec<_> = src.par_chunks(stride)
-            .flat_map(|row| {
-                self.scale.coeffs_w.par_iter().map(move |col| {
-                    let mut accum = Format::new();
-                    let in_px = &row[col.start..col.start + col.coeffs.len()];
-                    for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
-                        pix_fmt.add(&mut accum, in_px, coeff);
-                    }
-                    accum
-                })
-            })
-            .collect();
+        // Process each row in parallel. Each pixel within a row is processed sequentially.
+        src.par_chunks(stride).enumerate().for_each(|(y, row)| {
+            // Acquire a safe reference to the current position in the temporary buffer.
+            let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
+
+            // For each pixel in the row, calculate the horizontal resampling and store the result.
+            for (x, col) in self.scale.coeffs_w.iter().enumerate() {
+                let mut accum = Format::new();
+                let in_px = &row[col.start..col.start + col.coeffs.len()];
+                for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
+                    pix_fmt.add(&mut accum, in_px, coeff);
+                }
+
+                // Determine the location in the temporary buffer to store the result.
+                let pixel_offset = y * self.scale.coeffs_w.len() + x;
+                // Write the accumulated value to the temporary buffer.
+                unsafe {
+                    *tmp_raw_ptr.add(pixel_offset) = accum;
+                }
+            }
+        });
 
         // Vertical Resampling
-        let results: Vec<_> = self.scale.coeffs_h.par_iter().flat_map(|row| {
-            let tmp_rows = &tmp[w2 * row.start..];
-            (0..w2).into_par_iter().map(|col| {
-                let mut accum = Format::new();
-                for (coeff, other_row) in row.coeffs.iter().copied().zip(tmp_rows.chunks_exact(w2)) {
-                    Format::add_acc(&mut accum, other_row[col], coeff);
-                }
-                pix_fmt.into_pixel(accum)
-            })
-        })
-        .collect();
+        // Process each row in parallel. Each pixel within a row is processed sequentially.
+        let dst_ptr = AtomicPtr::new(dst.as_mut_ptr());
+        self.scale.coeffs_h.par_iter().enumerate().for_each(|(y, row)| {
+            // Acquire a safe reference to the current position in the temporary buffer.
+            let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
 
-        dst.copy_from_slice(&results);
+            // Determine the start of the current row in the temporary buffer.
+            let tmp_row_start = unsafe { tmp_raw_ptr.add(w2 * row.start) };
+
+            // For each pixel in the row, calculate the vertical resampling and store the result directly into the destination buffer.
+            for x in 0..w2 {
+                let mut accum = Format::new();
+                for (coeff_idx, coeff) in row.coeffs.iter().copied().enumerate() {
+                    // Calculate the appropriate pixel location based on the coefficient index.
+                    let other_row = unsafe { tmp_row_start.add(coeff_idx * w2) };
+                    let other_pixel = unsafe { *other_row.add(x) };
+                    Format::add_acc(&mut accum, other_pixel, coeff);
+                }
+
+                // Determine the location in the destination buffer to store the result.
+                let raw_ptr = dst_ptr.load(std::sync::atomic::Ordering::Relaxed);
+                // Write the accumulated value to the destination buffer.
+                unsafe {
+                    *raw_ptr.add(y * w2 + x) = pix_fmt.into_pixel(accum);
+                }
+            }
+        });
+
         Ok(())
     }
 
