@@ -6,13 +6,13 @@ pub use rgb::RGBA;
 /// Use [`Pixel`](crate::Pixel) presets to specify pixel format.
 ///
 /// The trait represents a temporary object that adds pixels together.
-pub trait PixelFormat {
+pub trait PixelFormat: Send + Sync {
     /// Pixel type in the source image
-    type InputPixel: Copy;
+    type InputPixel: Send + Sync + Copy;
     /// Pixel type in the destination image (usually the same as Input)
-    type OutputPixel;
+    type OutputPixel: Default + Send + Sync + Copy;
     /// Temporary struct for the pixel in floating-point
-    type Accumulator: Copy;
+    type Accumulator: Send + Sync + Copy;
 
     /// Create new floating-point pixel
     fn new() -> Self::Accumulator;
@@ -168,7 +168,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Gray<F, T> {
 use self::f::ToFloat;
 mod f {
     /// Internal, please don't use
-    pub trait ToFloat: Sized + Copy + 'static {
+    pub trait ToFloat: Default + Send + Sync + Sized + Copy + 'static {
         fn to_float(self) -> f32;
         fn from_float(f: f32) -> Self;
     }

@@ -1,10 +1,10 @@
 #![feature(test)]
 
 extern crate test;
-use rgb::FromSlice;
+use rgb::{FromSlice};
 use test::Bencher;
 
-use resize::Pixel::{Gray16, Gray8, RGB8, RGBA16, RGBA16P};
+use resize::Pixel::{Gray16, Gray8, RGB8, RGBA16, RGBA16P, RGBA8};
 use resize::Type::Triangle;
 use resize::Type::Lanczos3;
 use resize::Type::Point;
@@ -20,6 +20,17 @@ fn get_image() -> (u32, u32, Vec<u8>) {
     reader.next_frame(&mut src).unwrap();
     (width, height, src)
 }
+
+fn get_rolled() -> (u32, u32, Vec<u8>) {
+    let root: PathBuf = env!("CARGO_MANIFEST_DIR").into();
+    let decoder = png::Decoder::new(File::open(root.join("examples/roll.png")).unwrap());
+    let mut reader = decoder.read_info().unwrap();
+    let (width, height) = reader.info().size();
+    let mut src = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut src).unwrap();
+    (width, height, src)
+}
+
 
 #[bench]
 fn precomputed_large(b: &mut Bencher) {
@@ -61,6 +72,63 @@ fn huge_stretch(b: &mut Bencher) {
 
     let mut r = resize::new(w1, h1, w2, h2, Gray8, Triangle).unwrap();
     b.iter(|| r.resize(src1.as_gray(), dst.as_gray_mut()).unwrap());
+}
+
+#[bench]
+fn downsample_rgba(b: &mut Bencher) {
+    let (width, height, src0) = get_rolled();
+    let (w0, h0) = (width as usize, height as usize);
+    let (w1, h1) = (5000, 5000);
+    let mut src1 = vec![0; w1 * h1 * 4];
+
+    resize::new(w0, h0, w1, h1, RGBA8, Lanczos3)
+        .unwrap()
+        .resize(src0.as_rgba(), src1.as_rgba_mut())
+        .unwrap();
+
+    let (w2, h2) = (720, 480);
+    let mut dst = vec![0; w2 * h2 * 4];
+
+    let mut r = resize::new(w1, h1, w2, h2, RGBA8, Lanczos3).unwrap();
+    b.iter(|| r.resize(src1.as_rgba(), dst.as_rgba_mut()).unwrap());
+}
+
+#[bench]
+fn downsample_wide_rgba(b: &mut Bencher) {
+    let (width, height, src0) = get_rolled();
+    let (w0, h0) = (width as usize, height as usize);
+    let (w1, h1) = (10000, 10);
+    let mut src1 = vec![0; w1 * h1 * 4];
+
+    resize::new(w0, h0, w1, h1, RGBA8, Lanczos3)
+        .unwrap()
+        .resize(src0.as_rgba(), src1.as_rgba_mut())
+        .unwrap();
+
+    let (w2, h2) = (720, 480);
+    let mut dst = vec![0; w2 * h2 * 4];
+
+    let mut r = resize::new(w1, h1, w2, h2, RGBA8, Lanczos3).unwrap();
+    b.iter(|| r.resize(src1.as_rgba(), dst.as_rgba_mut()).unwrap());
+}
+
+#[bench]
+fn downsample_tall_rgba(b: &mut Bencher) {
+    let (width, height, src0) = get_rolled();
+    let (w0, h0) = (width as usize, height as usize);
+    let (w1, h1) = (10, 10000);
+    let mut src1 = vec![0; w1 * h1 * 4];
+
+    resize::new(w0, h0, w1, h1, RGBA8, Lanczos3)
+        .unwrap()
+        .resize(src0.as_rgba(), src1.as_rgba_mut())
+        .unwrap();
+
+    let (w2, h2) = (720, 480);
+    let mut dst = vec![0; w2 * h2 * 4];
+
+    let mut r = resize::new(w1, h1, w2, h2, RGBA8, Lanczos3).unwrap();
+    b.iter(|| r.resize(src1.as_rgba(), dst.as_rgba_mut()).unwrap());
 }
 
 #[bench]
