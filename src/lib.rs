@@ -538,80 +538,85 @@ impl fmt::Display for Error {
     }
 }
 
-#[test]
-fn oom() {
-    let _ = new(2, 2, isize::max_value() as _, isize::max_value() as _, Pixel::Gray16, Type::Triangle);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn niche() {
-    assert_eq!(std::mem::size_of::<Resizer<formats::Gray<f32, f32>>>(), std::mem::size_of::<Option<Resizer<formats::Gray<f32, f32>>>>());
-}
+    #[test]
+    fn oom() {
+        let _ = new(2, 2, isize::max_value() as _, isize::max_value() as _, Pixel::Gray16, Type::Triangle);
+    }
 
-#[test]
-fn zeros() {
-    assert!(new(1, 1, 1, 0, Pixel::Gray16, Type::Triangle).is_err());
-    assert!(new(1, 1, 0, 1, Pixel::Gray8, Type::Catrom).is_err());
-    assert!(new(1, 0, 1, 1, Pixel::RGBAF32, Type::Lanczos3).is_err());
-    assert!(new(0, 1, 1, 1, Pixel::RGB8, Type::Mitchell).is_err());
-}
+    #[test]
+    fn niche() {
+        assert_eq!(std::mem::size_of::<Resizer<formats::Gray<f32, f32>>>(), std::mem::size_of::<Option<Resizer<formats::Gray<f32, f32>>>>());
+    }
 
-#[test]
-fn premultiply() {
-    use px::RGBA;
-    let mut r = new(2, 2, 3, 4, Pixel::RGBA8P, Type::Triangle).unwrap();
-    let mut dst = vec![RGBA::new(0u8,0,0,0u8); 12];
-    r.resize(&[
-        RGBA::new(255,127,3,255), RGBA::new(0,0,0,0),
-        RGBA::new(255,255,255,0), RGBA::new(0,255,255,0),
-    ], &mut dst).unwrap();
-    assert_eq!(&dst, &[
-        RGBA { r: 255, g: 127, b: 3, a: 255 }, RGBA { r: 255, g: 127, b: 3, a: 128 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
-        RGBA { r: 255, g: 127, b: 3, a: 191 }, RGBA { r: 255, g: 127, b: 3, a: 96 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
-        RGBA { r: 255, g: 127, b: 3, a: 64 }, RGBA { r: 255, g: 127, b: 3, a: 32 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
-        RGBA { r: 0, g: 0, b: 0, a: 0 }, RGBA { r: 0, g: 0, b: 0, a: 0 }, RGBA { r: 0, g: 0, b: 0, a: 0 }
-    ]);
-}
+    #[test]
+    fn zeros() {
+        assert!(new(1, 1, 1, 0, Pixel::Gray16, Type::Triangle).is_err());
+        assert!(new(1, 1, 0, 1, Pixel::Gray8, Type::Catrom).is_err());
+        assert!(new(1, 0, 1, 1, Pixel::RGBAF32, Type::Lanczos3).is_err());
+        assert!(new(0, 1, 1, 1, Pixel::RGB8, Type::Mitchell).is_err());
+    }
 
-#[test]
-fn premultiply_solid() {
-    use px::RGBA;
-    let mut r = new(2, 2, 3, 4, Pixel::RGBA8P, Type::Triangle).unwrap();
-    let mut dst = vec![RGBA::new(0u8,0,0,0u8); 12];
-    r.resize(&[
-        RGBA::new(255,255,255,255), RGBA::new(0,0,0,255),
-        RGBA::new(0,0,0,255), RGBA::new(0,0,0,255),
-    ], &mut dst).unwrap();
-    assert_eq!(&dst, &[
-        RGBA { r: 255, g: 255, b: 255, a: 255 }, RGBA { r: 128, g: 128, b: 128, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
-        RGBA { r: 191, g: 191, b: 191, a: 255 }, RGBA { r: 96, g: 96, b: 96, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
-        RGBA { r: 64, g: 64, b: 64, a: 255 }, RGBA { r: 32, g: 32, b: 32, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
-        RGBA { r: 0, g: 0, b: 0, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
-    ]);
-}
+    #[test]
+    fn premultiply() {
+        use px::RGBA;
+        let mut r = new(2, 2, 3, 4, Pixel::RGBA8P, Type::Triangle).unwrap();
+        let mut dst = vec![RGBA::new(0u8,0,0,0u8); 12];
+        r.resize(&[
+            RGBA::new(255,127,3,255), RGBA::new(0,0,0,0),
+            RGBA::new(255,255,255,0), RGBA::new(0,255,255,0),
+        ], &mut dst).unwrap();
+        assert_eq!(&dst, &[
+            RGBA { r: 255, g: 127, b: 3, a: 255 }, RGBA { r: 255, g: 127, b: 3, a: 128 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
+            RGBA { r: 255, g: 127, b: 3, a: 191 }, RGBA { r: 255, g: 127, b: 3, a: 96 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
+            RGBA { r: 255, g: 127, b: 3, a: 64 }, RGBA { r: 255, g: 127, b: 3, a: 32 }, RGBA { r: 0, g: 0, b: 0, a: 0 },
+            RGBA { r: 0, g: 0, b: 0, a: 0 }, RGBA { r: 0, g: 0, b: 0, a: 0 }, RGBA { r: 0, g: 0, b: 0, a: 0 }
+        ]);
+    }
 
-#[test]
-fn resize_stride() {
-    use rgb::FromSlice;
+    #[test]
+    fn premultiply_solid() {
+        use px::RGBA;
+        let mut r = new(2, 2, 3, 4, Pixel::RGBA8P, Type::Triangle).unwrap();
+        let mut dst = vec![RGBA::new(0u8,0,0,0u8); 12];
+        r.resize(&[
+            RGBA::new(255,255,255,255), RGBA::new(0,0,0,255),
+            RGBA::new(0,0,0,255), RGBA::new(0,0,0,255),
+        ], &mut dst).unwrap();
+        assert_eq!(&dst, &[
+            RGBA { r: 255, g: 255, b: 255, a: 255 }, RGBA { r: 128, g: 128, b: 128, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+            RGBA { r: 191, g: 191, b: 191, a: 255 }, RGBA { r: 96, g: 96, b: 96, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+            RGBA { r: 64, g: 64, b: 64, a: 255 }, RGBA { r: 32, g: 32, b: 32, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+            RGBA { r: 0, g: 0, b: 0, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 }, RGBA { r: 0, g: 0, b: 0, a: 255 },
+        ]);
+    }
 
-    let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle).unwrap();
-    let mut dst = vec![0; 12];
-    r.resize_stride(&[
-        65535,65535,1,2,
-        65535,65535,3,4,
-    ].as_gray(), 4, dst.as_gray_mut()).unwrap();
-    assert_eq!(&dst, &[65535; 12]);
-}
+    #[test]
+    fn resize_stride() {
+        use rgb::FromSlice;
 
-#[test]
-fn resize_float() {
-    use rgb::FromSlice;
+        let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle).unwrap();
+        let mut dst = vec![0; 12];
+        r.resize_stride(&[
+            65535,65535,1,2,
+            65535,65535,3,4,
+        ].as_gray(), 4, dst.as_gray_mut()).unwrap();
+        assert_eq!(&dst, &[65535; 12]);
+    }
 
-    let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle).unwrap();
-    let mut dst = vec![0.; 12];
-    r.resize_stride(&[
-        65535.,65535.,1.,2.,
-        65535.,65535.,3.,4.,
-    ].as_gray(), 4, dst.as_gray_mut()).unwrap();
-    assert_eq!(&dst, &[65535.; 12]);
+    #[test]
+    fn resize_float() {
+        use rgb::FromSlice;
+
+        let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle).unwrap();
+        let mut dst = vec![0.; 12];
+        r.resize_stride(&[
+            65535.,65535.,1.,2.,
+            65535.,65535.,3.,4.,
+        ].as_gray(), 4, dst.as_gray_mut()).unwrap();
+        assert_eq!(&dst, &[65535.; 12]);
+    }
 }
