@@ -26,22 +26,42 @@
 // * https://github.com/sekrit-twc/zimg/tree/master/src/zimg/resize
 // * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
 #![deny(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(not(any(feature = "std", feature = "no_std")))]
+compile_error!("Either the `std` or `no_std` feature must be enabled");
+
+extern crate alloc;
+
+use core::f32;
+use core::fmt;
+use core::num::NonZeroUsize;
+
+use alloc::boxed::Box;
+use alloc::collections::TryReserveError;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+#[cfg(feature = "std")]
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::f32;
-use std::fmt;
-use std::num::NonZeroUsize;
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 /// See [Error]
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 /// Pixel format from the [rgb] crate.
 pub mod px;
 pub use px::PixelFormat;
+
+#[cfg(not(feature = "std"))]
+mod no_std_float;
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use no_std_float::FloatExt;
 
 /// Resizing type to use.
 pub enum Type {
@@ -151,8 +171,8 @@ fn lanczos(taps: f32, x: f32) -> f32 {
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 pub mod Pixel {
-    use std::marker::PhantomData;
     use crate::formats;
+    use core::marker::PhantomData;
 
     /// Grayscale, 8-bit.
     #[cfg_attr(docsrs, doc(alias = "Grey"))]
@@ -212,7 +232,7 @@ pub mod Pixel {
 /// These structs implement `PixelFormat` trait that allows conversion to and from internal pixel representation.
 #[doc(hidden)]
 pub mod formats {
-    use std::marker::PhantomData;
+    use core::marker::PhantomData;
     /// RGB pixels
     #[derive(Debug, Copy, Clone)]
     pub struct Rgb<InputSubpixel, OutputSubpixel>(pub(crate) PhantomData<(InputSubpixel, OutputSubpixel)>);
@@ -387,7 +407,7 @@ impl<Format: PixelFormat> Resizer<Format> {
 
     #[cfg(feature = "rayon")]
     fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
-        use std::sync::atomic::AtomicPtr;
+        use core::sync::atomic::AtomicPtr;
 
         let stride = stride.get();
         let pix_fmt = &self.pix_fmt;
@@ -412,7 +432,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             // For each pixel in the row, calculate the horizontal resampling and store the result.
             self.scale.coeffs_w.par_iter().enumerate().for_each(|(x, col)| {
                 // Acquire a safe reference to the current position in the temporary buffer.
-                let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
+                let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
 
                 let mut accum = Format::new();
                 let in_px = &row[col.start..col.start + col.coeffs.len()];
@@ -436,7 +456,7 @@ impl<Format: PixelFormat> Resizer<Format> {
             // For each pixel in the row, calculate the vertical resampling and store the result directly into the destination buffer.
              (0..w2).into_par_iter().for_each(|x| {
                 // Acquire a safe reference to the current position in the temporary buffer.
-                let tmp_raw_ptr = tmp_ptr.load(std::sync::atomic::Ordering::Relaxed);
+                let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
 
                 // Determine the start of the current row in the temporary buffer.
                 let tmp_row_start = unsafe { tmp_raw_ptr.add(w2 * row.start) };
@@ -450,7 +470,7 @@ impl<Format: PixelFormat> Resizer<Format> {
                 }
 
                 // Determine the location in the destination buffer to store the result.
-                let raw_ptr = dst_ptr.load(std::sync::atomic::Ordering::Relaxed);
+                let raw_ptr = dst_ptr.load(core::sync::atomic::Ordering::Relaxed);
                 // Write the accumulated value to the destination buffer.
                 unsafe {
                     *raw_ptr.add(y * w2 + x) = pix_fmt.into_pixel(accum);
@@ -519,11 +539,20 @@ pub enum Error {
     InvalidParameters,
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
-impl From<std::collections::TryReserveError> for Error {
+impl From<TryReserveError> for Error {
     #[inline(always)]
-    fn from(_: std::collections::TryReserveError) -> Self {
+    fn from(_: TryReserveError) -> Self {
+        Self::OutOfMemory
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl From<hashbrown::TryReserveError> for Error {
+    #[inline(always)]
+    fn from(_: hashbrown::TryReserveError) -> Self {
         Self::OutOfMemory
     }
 }
@@ -538,7 +567,7 @@ impl fmt::Display for Error {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
 
