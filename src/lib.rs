@@ -420,30 +420,25 @@ impl<Format: PixelFormat> Resizer<Format> {
         self.tmp.clear();
         self.tmp.try_reserve(self.scale.w2() * self.scale.h1.get())?;
 
-        // Initialize an atomic pointer for safe multithreaded access.
-        let tmp_ptr = AtomicPtr::new(self.tmp.as_mut_ptr());
 
         // Horizontal Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
-        src.par_chunks(stride).enumerate().for_each(|(y, row)| {
-            // Acquire a safe reference to the current position in the temporary buffer.
-            let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
+        src.par_chunks(stride).zip(self.tmp.spare_capacity_mut().par_chunks_exact_mut(self.scale.coeffs_w.len())).for_each(|(row, tmp)| {
             // For each pixel in the row, calculate the horizontal resampling and store the result.
-            self.scale.coeffs_w.iter().enumerate().for_each(|(x, col)| {
+            self.scale.coeffs_w.iter().zip(tmp).for_each(move |(col, tmp)| {
                 let mut accum = Format::new();
                 let in_px = &row[col.start..col.start + col.coeffs.len()];
                 for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
                     pix_fmt.add(&mut accum, in_px, coeff);
                 }
 
-                // Determine the location in the temporary buffer to store the result.
-                let pixel_offset = y * self.scale.coeffs_w.len() + x;
                 // Write the accumulated value to the temporary buffer.
-                unsafe {
-                    *tmp_raw_ptr.add(pixel_offset) = accum;
-                }
+                tmp.write(accum);
             });
         });
+
+        // Initialize an atomic pointer for safe multithreaded access.
+        let tmp_ptr = AtomicPtr::new(self.tmp.as_mut_ptr());
 
         // Vertical Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
