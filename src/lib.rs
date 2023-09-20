@@ -426,11 +426,10 @@ impl<Format: PixelFormat> Resizer<Format> {
         // Horizontal Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
         src.par_chunks(stride).enumerate().for_each(|(y, row)| {
+            // Acquire a safe reference to the current position in the temporary buffer.
+            let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
             // For each pixel in the row, calculate the horizontal resampling and store the result.
-            self.scale.coeffs_w.par_iter().enumerate().for_each(|(x, col)| {
-                // Acquire a safe reference to the current position in the temporary buffer.
-                let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
-
+            self.scale.coeffs_w.iter().enumerate().for_each(|(x, col)| {
                 let mut accum = Format::new();
                 let in_px = &row[col.start..col.start + col.coeffs.len()];
                 for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
@@ -450,10 +449,10 @@ impl<Format: PixelFormat> Resizer<Format> {
         // Process each row in parallel. Each pixel within a row is processed sequentially.
         let dst_ptr = AtomicPtr::new(dst.as_mut_ptr());
         self.scale.coeffs_h.par_iter().enumerate().for_each(|(y, row)| {
+            // Acquire a safe reference to the current position in the temporary buffer.
+            let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
             // For each pixel in the row, calculate the vertical resampling and store the result directly into the destination buffer.
-             (0..w2).into_par_iter().for_each(|x| {
-                // Acquire a safe reference to the current position in the temporary buffer.
-                let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
+             (0..w2).for_each(|x| {
 
                 // Determine the start of the current row in the temporary buffer.
                 let tmp_row_start = unsafe { tmp_raw_ptr.add(w2 * row.start) };
