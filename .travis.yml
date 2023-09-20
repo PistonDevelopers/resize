@@ -4,6 +4,9 @@ rust:
   - beta
   - nightly
 script:
+  - cargo build --no-default-features --features no_std -v
+  - cargo test --no-default-features --features no_std -v
+  - cargo doc --no-default-features --features no_std -v
   - cargo build -v
   - cargo test -v
   - cargo doc -v
