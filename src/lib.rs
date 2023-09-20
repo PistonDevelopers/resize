@@ -364,24 +364,33 @@ impl<Format: PixelFormat> Resizer<Format> {
 
     /// Stride is a length of the source row (>= W1)
     #[cfg(not(feature = "rayon"))]
-    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, mut dst: &mut [Format::OutputPixel]) -> Result<()> {
+    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
+        let w2 = self.scale.w2();
+
+        // eliminate panic in step_by
+        if w2 == 0 {
+            return Err(Error::InvalidParameters);
+        }
+
         self.tmp.clear();
-        self.tmp.try_reserve_exact(self.scale.w2() * self.scale.h1.get())?;
+        self.tmp.try_reserve_exact(w2 * self.scale.h1.get())?;
 
         // Outer loop resamples W2xH1 to W2xH2
         let mut src_rows = src.chunks(stride.get());
-        for row in &self.scale.coeffs_h {
-            let w2 = self.scale.w2();
+        for (dst, row) in dst.chunks_exact_mut(w2).zip(&self.scale.coeffs_h) {
 
             // Inner loop resamples W1xH1 to W2xH1,
             // but only as many rows as necessary to write a new line
             // to the output
-            while self.tmp.len() < w2 * (row.start + row.coeffs.len()) {
+            let end = w2 * (row.start + row.coeffs.len());
+            while self.tmp.len() < end {
                 let row = src_rows.next().unwrap();
                 let pix_fmt = &self.pix_fmt;
                 self.tmp.extend(self.scale.coeffs_w.iter().map(|col| {
+                    // it won't fail, but get avoids panic code bloat
+                    let in_px = row.get(col.start..col.start + col.coeffs.len()).unwrap_or_default();
+
                     let mut accum = Format::new();
-                    let in_px = &row[col.start..col.start + col.coeffs.len()];
                     for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
                         pix_fmt.add(&mut accum, in_px, coeff)
                     }
@@ -389,44 +398,51 @@ impl<Format: PixelFormat> Resizer<Format> {
                 }));
             }
 
-            let tmp_rows = &self.tmp[w2 * row.start..];
-            for (col, dst_px) in dst[0..w2].iter_mut().enumerate() {
+            let tmp_row_start = &self.tmp.get(w2 * row.start..).unwrap_or_default();
+            for (col, dst_px) in dst.iter_mut().enumerate() {
                 let mut accum = Format::new();
-                for (coeff, other_row) in row.coeffs.iter().copied().zip(tmp_rows.chunks_exact(w2)) {
-                    Format::add_acc(&mut accum, other_row[col], coeff);
+                for (coeff, other_row) in row.coeffs.iter().copied().zip(tmp_row_start.iter().copied().skip(col).step_by(w2)) {
+                    Format::add_acc(&mut accum, other_row, coeff);
                 }
                 *dst_px = self.pix_fmt.into_pixel(accum);
             }
-            dst = &mut dst[w2..];
         }
         Ok(())
     }
 
     #[cfg(feature = "rayon")]
-    fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
-        use core::sync::atomic::AtomicPtr;
-
+    fn resample_both_axes(&mut self, mut src: &[Format::InputPixel], stride: NonZeroUsize, dst: &mut [Format::OutputPixel]) -> Result<()> {
         let stride = stride.get();
         let pix_fmt = &self.pix_fmt;
         let w2 = self.scale.w2();
         let h2 = self.scale.h2();
 
         // Ensure the destination buffer has adequate size for the resampling operation.
-        if dst.len() < w2 * h2 {
+        if w2 == 0 || h2 == 0 || dst.len() < w2 * h2 || src.len() < (stride * self.scale.h1.get()) + self.scale.w1.get() - stride {
             return Err(Error::InvalidParameters);
+        }
+
+        // ensure it doesn't have too many rows
+        if src.len() > stride * self.scale.h1.get() {
+            src = &src[..stride * self.scale.h1.get()];
         }
 
         // Prepare the temporary buffer for intermediate storage.
         self.tmp.clear();
-        self.tmp.try_reserve_exact(self.scale.w2() * self.scale.h1.get())?;
+        let tmp_area = w2 * self.scale.h1.get();
+        self.tmp.try_reserve_exact(tmp_area)?;
+
+        debug_assert_eq!(w2, self.scale.coeffs_w.len());
 
         // Horizontal Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
         src.par_chunks(stride).zip(self.tmp.spare_capacity_mut().par_chunks_exact_mut(self.scale.coeffs_w.len())).for_each(|(row, tmp)| {
             // For each pixel in the row, calculate the horizontal resampling and store the result.
             self.scale.coeffs_w.iter().zip(tmp).for_each(move |(col, tmp)| {
+                // this get won't fail, but it generates less code than panicking []
+                let in_px = row.get(col.start..col.start + col.coeffs.len()).unwrap_or_default();
+
                 let mut accum = Format::new();
-                let in_px = &row[col.start..col.start + col.coeffs.len()];
                 for (coeff, in_px) in col.coeffs.iter().copied().zip(in_px.iter().copied()) {
                     pix_fmt.add(&mut accum, in_px, coeff);
                 }
@@ -436,35 +452,25 @@ impl<Format: PixelFormat> Resizer<Format> {
             });
         });
 
-        // Initialize an atomic pointer for safe multithreaded access.
-        let tmp_ptr = AtomicPtr::new(self.tmp.as_mut_ptr());
+        // already checked that src had right number lines for the loop to write all
+        unsafe { self.tmp.set_len(tmp_area); }
+
+        let tmp_slice = self.tmp.as_slice();
 
         // Vertical Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
-        let dst_ptr = AtomicPtr::new(dst.as_mut_ptr());
-        self.scale.coeffs_h.par_iter().enumerate().for_each(|(y, row)| {
-            // Acquire a safe reference to the current position in the temporary buffer.
-            let tmp_raw_ptr = tmp_ptr.load(core::sync::atomic::Ordering::Relaxed);
+        self.scale.coeffs_h.par_iter().zip(dst.par_chunks_exact_mut(w2)).for_each(move |(row, dst)| {
+            // Determine the start of the current row in the temporary buffer.
+            let tmp_row_start = &tmp_slice.get(w2 * row.start..).unwrap_or_default();
             // For each pixel in the row, calculate the vertical resampling and store the result directly into the destination buffer.
-             (0..w2).for_each(|x| {
-
-                // Determine the start of the current row in the temporary buffer.
-                let tmp_row_start = unsafe { tmp_raw_ptr.add(w2 * row.start) };
-
+            dst.iter_mut().enumerate().for_each(move |(x, dst)| {
                 let mut accum = Format::new();
-                for (coeff_idx, coeff) in row.coeffs.iter().copied().enumerate() {
-                    // Calculate the appropriate pixel location based on the coefficient index.
-                    let other_row = unsafe { tmp_row_start.add(coeff_idx * w2) };
-                    let other_pixel = unsafe { *other_row.add(x) };
+                for (coeff, other_pixel) in row.coeffs.iter().copied().zip(tmp_row_start.iter().copied().skip(x).step_by(w2)) {
                     Format::add_acc(&mut accum, other_pixel, coeff);
                 }
 
-                // Determine the location in the destination buffer to store the result.
-                let raw_ptr = dst_ptr.load(core::sync::atomic::Ordering::Relaxed);
                 // Write the accumulated value to the destination buffer.
-                unsafe {
-                    *raw_ptr.add(y * w2 + x) = pix_fmt.into_pixel(accum);
-                }
+                *dst = pix_fmt.into_pixel(accum);
             });
         });
 
