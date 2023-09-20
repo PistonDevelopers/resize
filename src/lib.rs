@@ -366,7 +366,7 @@ impl<Format: PixelFormat> Resizer<Format> {
     #[cfg(not(feature = "rayon"))]
     fn resample_both_axes(&mut self, src: &[Format::InputPixel], stride: NonZeroUsize, mut dst: &mut [Format::OutputPixel]) -> Result<()> {
         self.tmp.clear();
-        self.tmp.try_reserve(self.scale.w2() * self.scale.h1.get())?;
+        self.tmp.try_reserve_exact(self.scale.w2() * self.scale.h1.get())?;
 
         // Outer loop resamples W2xH1 to W2xH2
         let mut src_rows = src.chunks(stride.get());
@@ -418,8 +418,7 @@ impl<Format: PixelFormat> Resizer<Format> {
 
         // Prepare the temporary buffer for intermediate storage.
         self.tmp.clear();
-        self.tmp.try_reserve(self.scale.w2() * self.scale.h1.get())?;
-
+        self.tmp.try_reserve_exact(self.scale.w2() * self.scale.h1.get())?;
 
         // Horizontal Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
