@@ -26,10 +26,7 @@
 // * https://github.com/sekrit-twc/zimg/tree/master/src/zimg/resize
 // * https://github.com/PistonDevelopers/image/blob/master/src/imageops/sample.rs
 #![deny(missing_docs)]
-#![cfg_attr(not(feature = "std"), no_std)]
-
-#[cfg(not(any(feature = "std", feature = "no_std")))]
-compile_error!("Either the `std` or `no_std` feature must be enabled");
+#![cfg_attr(all(feature = "no_std", not(feature = "std")), no_std)]
 
 extern crate alloc;
 
@@ -42,9 +39,9 @@ use alloc::collections::TryReserveError;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 use hashbrown::HashMap;
-#[cfg(feature = "std")]
+#[cfg(not(all(feature = "no_std", not(feature = "std"))))]
 use std::collections::HashMap;
 
 #[cfg(feature = "rayon")]
@@ -57,9 +54,9 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 pub mod px;
 pub use px::PixelFormat;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 mod no_std_float;
-#[cfg(not(feature = "std"))]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 #[allow(unused_imports)]
 use no_std_float::FloatExt;
 
@@ -549,7 +546,7 @@ impl From<TryReserveError> for Error {
     }
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 impl From<hashbrown::TryReserveError> for Error {
     #[inline(always)]
     fn from(_: hashbrown::TryReserveError) -> Self {
