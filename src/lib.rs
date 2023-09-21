@@ -416,27 +416,33 @@ impl<Format: PixelFormat> Resizer<Format> {
         let pix_fmt = &self.pix_fmt;
         let w2 = self.scale.w2();
         let h2 = self.scale.h2();
+        let w1 = self.scale.w1.get();
+        let h1 = self.scale.h1.get();
 
         // Ensure the destination buffer has adequate size for the resampling operation.
-        if w2 == 0 || h2 == 0 || dst.len() < w2 * h2 || src.len() < (stride * self.scale.h1.get()) + self.scale.w1.get() - stride {
+        if w2 == 0 || h2 == 0 || dst.len() < w2 * h2 || src.len() < (stride * h1) + w1 - stride {
             return Err(Error::InvalidParameters);
         }
 
         // ensure it doesn't have too many rows
-        if src.len() > stride * self.scale.h1.get() {
-            src = &src[..stride * self.scale.h1.get()];
+        if src.len() > stride * h1 {
+            src = &src[..stride * h1];
         }
 
         // Prepare the temporary buffer for intermediate storage.
         self.tmp.clear();
-        let tmp_area = w2 * self.scale.h1.get();
+        let tmp_area = w2 * h1;
         self.tmp.try_reserve_exact(tmp_area)?;
 
         debug_assert_eq!(w2, self.scale.coeffs_w.len());
 
+        // in tiny images spawning of tasks takes longer than single-threaded resizing
+        // constant/area is for small images. h1.max(w2) for wide images. h1/256 for tall images.
+        let work_chunk = ((1<<14) / (w2 * h1.max(w2))).max(h1/256);
+
         // Horizontal Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
-        src.par_chunks(stride).zip(self.tmp.spare_capacity_mut().par_chunks_exact_mut(self.scale.coeffs_w.len())).for_each(|(row, tmp)| {
+        src.par_chunks(stride).with_min_len(work_chunk).zip(self.tmp.spare_capacity_mut().par_chunks_exact_mut(self.scale.coeffs_w.len())).for_each(|(row, tmp)| {
             // For each pixel in the row, calculate the horizontal resampling and store the result.
             self.scale.coeffs_w.iter().zip(tmp).for_each(move |(col, tmp)| {
                 // this get won't fail, but it generates less code than panicking []
@@ -459,7 +465,7 @@ impl<Format: PixelFormat> Resizer<Format> {
 
         // Vertical Resampling
         // Process each row in parallel. Each pixel within a row is processed sequentially.
-        self.scale.coeffs_h.par_iter().zip(dst.par_chunks_exact_mut(w2)).for_each(move |(row, dst)| {
+        dst.par_chunks_exact_mut(w2).with_min_len(((1<<14) / (w2 * h2.max(w2))).max(h2/256)).zip(self.scale.coeffs_h.par_iter()).for_each(move |(dst, row)| {
             // Determine the start of the current row in the temporary buffer.
             let tmp_row_start = &tmp_slice.get(w2 * row.start..).unwrap_or_default();
             // For each pixel in the row, calculate the vertical resampling and store the result directly into the destination buffer.
