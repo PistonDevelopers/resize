@@ -340,7 +340,7 @@ impl Scale {
         let ratio = s1.get() as f64 / s2 as f64;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
-        let filter_radius = (support as f64 * filter_scale).ceil();
+        let filter_radius = (f64::from(support) * filter_scale).ceil();
         let mut res = Vec::new();
         res.try_reserve_exact(s2)?;
         for x2 in 0..s2 {
@@ -349,12 +349,12 @@ impl Scale {
             let start = start.min(s1.get() as isize - 1).max(0) as usize;
             let end = (x1 + filter_radius).floor() as isize;
             let end = (end.min(s1.get() as isize - 1).max(0) as usize).max(start);
-            let sum: f64 = (start..=end).map(|i| (kernel)(((i as f64 - x1) / filter_scale) as f32) as f64).sum();
+            let sum: f64 = (start..=end).map(|i| f64::from((kernel)(((i as f64 - x1) / filter_scale) as f32))).sum();
             let key = (end - start, (filter_scale as f32).to_ne_bytes(), (start as f32 - x1 as f32).to_ne_bytes());
             let coeffs = if let Some(k) = recycled_coeffs.get(&key) { k.clone() } else {
                 let tmp = (start..=end).map(|i| {
                     let n = ((i as f64 - x1) / filter_scale) as f32;
-                    ((kernel)(n.min(support).max(-support)) as f64 / sum) as f32
+                    (f64::from((kernel)(n.min(support).max(-support))) / sum) as f32
                 }).collect::<Arc<[_]>>();
                 recycled_coeffs.try_reserve(1)?;
                 recycled_coeffs.insert(key, tmp.clone());
@@ -646,7 +646,7 @@ mod tests {
 
         let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle).unwrap();
         let mut dst = vec![0; 12];
-        r.resize_stride(&[
+        r.resize_stride([
             65535,65535,1,2,
             65535,65535,3,4,
         ].as_gray(), 4, dst.as_gray_mut()).unwrap();
@@ -659,7 +659,7 @@ mod tests {
 
         let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle).unwrap();
         let mut dst = vec![0.; 12];
-        r.resize_stride(&[
+        r.resize_stride([
             65535.,65535.,1.,2.,
             65535.,65535.,3.,4.,
         ].as_gray(), 4, dst.as_gray_mut()).unwrap();

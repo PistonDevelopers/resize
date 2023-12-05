@@ -1,10 +1,10 @@
+use png::BitDepth;
+use png::ColorType;
 use resize::Pixel;
 use resize::Type::Triangle;
+use rgb::FromSlice;
 use std::env;
 use std::fs::File;
-use png::ColorType;
-use png::BitDepth;
-use rgb::FromSlice;
 
 fn main() {
     let args: Vec<_> = env::args().collect();
@@ -21,7 +21,7 @@ fn main() {
     let mut src = vec![0; reader.output_buffer_size()];
     reader.next_frame(&mut src).unwrap();
 
-    let dst_dims: Vec<_> = args[2].split("x").map(|s| s.parse().unwrap()).collect();
+    let dst_dims: Vec<_> = args[2].split('x').map(|s| s.parse().unwrap()).collect();
     let (w2, h2) = (dst_dims[0], dst_dims[1]);
     let mut dst = vec![0u8; w2 * h2 * color_type.samples()];
 

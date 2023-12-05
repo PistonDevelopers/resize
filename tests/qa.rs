@@ -23,18 +23,18 @@ fn write_png(path: &Path, w2: usize, h2: usize, pixels: &[u8]) {
 
 fn img_diff(a: &[u8], b: &[u8]) -> f64 {
     assert_eq!(a.len(), b.len());
-    let sum = a.iter().cloned().zip(b.iter().cloned()).map(|(a,b)| {
-        (a as i32 - b as i32).pow(2) as u32
+    let sum = a.iter().copied().zip(b.iter().copied()).map(|(a,b)| {
+        (i32::from(a) - i32::from(b)).pow(2) as u32
     }).sum::<u32>();
-    sum as f64 / a.len() as f64
+    f64::from(sum) / a.len() as f64
 }
 
 fn assert_equals(img: &[u8], w2: usize, h2: usize, expected_filename: &str) {
     assert_eq!(img.len(), w2 * h2);
     assert!(w2 > 0 && h2 > 0);
-    let (_, _, expected) = load_png(&fs::read(&expected_filename).expect(expected_filename)).expect(expected_filename);
+    let (_, _, expected) = load_png(&fs::read(expected_filename).expect(expected_filename)).expect(expected_filename);
 
-    let diff = img_diff(&img, &expected);
+    let diff = img_diff(img, &expected);
     if diff > 0.0004 {
         let bad_file = Path::new(expected_filename).with_extension("failed-test.png");
         write_png(&bad_file, w2, h2, img);
@@ -60,7 +60,7 @@ fn test_width(w2: usize) {
     use rgb::FromSlice;
 
     let tiger = &include_bytes!("../examples/tiger.png")[..];
-    let (w1, h1, src) = load_png(&tiger).unwrap();
+    let (w1, h1, src) = load_png(tiger).unwrap();
     let mut res1 = vec![];
     let mut res2 = vec![];
     let mut res3 = vec![0; 80*120];
@@ -70,16 +70,16 @@ fn test_width(w2: usize) {
         res1.resize(w2 * h2, 0);
 
         resize::new(w1, h1, w2, h2, Gray8, Lanczos3).unwrap().resize(src.as_gray(), res1.as_gray_mut()).unwrap();
-        assert_equals(&res1, w2, h2, &format!("tests/t{}x{}.png", w2, h2));
+        assert_equals(&res1, w2, h2, &format!("tests/t{w2}x{h2}.png"));
 
         res2.clear();
         res2.resize(100 * 100, 255);
 
         resize::new(w2, h2, 100, 100, Gray8, Triangle).unwrap().resize(res1.as_gray(), res2.as_gray_mut()).unwrap();
-        assert_equals(&res2, 100, 100, &format!("tests/t{}x{}-100.png", w2, h2));
+        assert_equals(&res2, 100, 100, &format!("tests/t{w2}x{h2}-100.png"));
 
         resize::new(100, 100, 80, 120, Gray8, Point).unwrap().resize(res2.as_gray(), res3.as_gray_mut()).unwrap();
-        assert_equals(&res3, 80, 120, &format!("tests/t{}x{}-point.png", w2, h2));
+        assert_equals(&res3, 80, 120, &format!("tests/t{w2}x{h2}-point.png"));
     }
 }
 

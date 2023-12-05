@@ -1,14 +1,14 @@
 #![feature(test)]
 
 extern crate test;
-use rgb::{FromSlice};
+use rgb::FromSlice;
 use test::Bencher;
 
 use resize::Pixel::{Gray16, Gray8, RGB8, RGBA16, RGBA16P, RGBA8};
 use resize::Type::Catrom;
-use resize::Type::Triangle;
 use resize::Type::Lanczos3;
 use resize::Type::Point;
+use resize::Type::Triangle;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -31,7 +31,6 @@ fn get_rolled() -> (u32, u32, Vec<u8>) {
     reader.next_frame(&mut src).unwrap();
     (width, height, src)
 }
-
 
 #[bench]
 fn precomputed_large(b: &mut Bencher) {
@@ -206,7 +205,7 @@ fn precomputed_small(b: &mut Bencher) {
 #[bench]
 fn a_small_rgb(b: &mut Bencher) {
     let (width, height, src) = get_image();
-    let src: Vec<_> = src.into_iter().map(|c| rgb::RGB::new(c,c,c)).collect();
+    let src: Vec<_> = src.into_iter().map(|c| rgb::RGB::new(c, c, c)).collect();
     let (w1, h1) = (width as usize, height as usize);
     let (w2, h2) = (100, 100);
     let mut dst = vec![240; w2 * h2 * 3];
@@ -220,7 +219,7 @@ fn a_small_rgb(b: &mut Bencher) {
 fn a_small_rgba16(b: &mut Bencher) {
     let (width, height, src) = get_image();
     let src: Vec<_> = src.into_iter().map(|c| {
-        let w = ((c as u16) << 8) | c as u16;
+        let w = (u16::from(c) << 8) | u16::from(c);
         rgb::RGBA::new(w,w,w,65535)
     }).collect();
     let (w1, h1) = (width as usize, height as usize);
@@ -236,7 +235,7 @@ fn a_small_rgba16(b: &mut Bencher) {
 fn a_small_rgba16_premultiplied(b: &mut Bencher) {
     let (width, height, src) = get_image();
     let src: Vec<_> = src.into_iter().map(|c| {
-        let w = ((c as u16) << 8) | c as u16;
+        let w = (u16::from(c) << 8) | u16::from(c);
         rgb::RGBA::new(w,w,w,65535)
     }).collect();
     let (w1, h1) = (width as usize, height as usize);
@@ -255,7 +254,7 @@ fn precomputed_small_16bit(b: &mut Bencher) {
     let (w2, h2) = (100,100);
     let mut dst = vec![33; w2*h2];
     let src: Vec<_> = src.into_iter().map(|px|{
-        let px = px as u16;
+        let px = u16::from(px);
         (px << 8) | px
     }).collect();
 

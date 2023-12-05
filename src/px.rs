@@ -31,7 +31,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Rgb<T, F> {
 
     #[inline(always)]
     fn new() -> Self::Accumulator {
-        RGB::new(0.,0.,0.)
+        RGB::new(0., 0., 0.)
     }
 
     #[inline(always)]
@@ -65,7 +65,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Rgba<T, F> {
 
     #[inline(always)]
     fn new() -> Self::Accumulator {
-        RGBA::new(0.,0.,0.,0.)
+        RGBA::new(0., 0., 0., 0.)
     }
 
     #[inline(always)]
@@ -102,7 +102,7 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for formats::RgbaPremultiply<T, F> {
 
     #[inline(always)]
     fn new() -> Self::Accumulator {
-        RGBA::new(0.,0.,0.,0.)
+        RGBA::new(0., 0., 0., 0.)
     }
 
     #[inline(always)]
@@ -176,7 +176,7 @@ mod f {
     impl ToFloat for u8 {
         #[inline(always)]
         fn to_float(self) -> f32 {
-            self as f32
+            f32::from(self)
         }
 
         #[inline(always)]
@@ -188,7 +188,7 @@ mod f {
     impl ToFloat for u16 {
         #[inline(always)]
         fn to_float(self) -> f32 {
-            self as f32
+            f32::from(self)
         }
 
         #[inline(always)]
@@ -217,7 +217,7 @@ mod f {
 
         #[inline(always)]
         fn from_float(f: f32) -> Self {
-            f as f64
+            f64::from(f)
         }
     }
 }
