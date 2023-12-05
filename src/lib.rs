@@ -70,6 +70,10 @@ pub enum Type {
     Catrom,
     /// Resize using Mitchell-Netravali filter.
     Mitchell,
+    /// B-spline (bicubic) resizing.
+    BSpline,
+    /// Gaussian resizing.
+    Gaussian,
     /// Resize using Sinc-windowed Sinc with radius of 3.
     Lanczos3,
     /// Resize with custom filter.
@@ -143,6 +147,15 @@ fn cubic_bc(b: f32, c: f32, x: f32) -> f32 {
         0.0
     };
     k / 6.0
+}
+
+// Taken from
+//https://github.com/image-rs/image/blob/81b3fe66fba04b8b60ba79b3641826df22fca67e/src/imageops/sample.rs#L181
+/// The Gaussian Function.
+/// ```r``` is the standard deviation.
+#[inline(always)]
+fn gaussian(x: f32, r: f32) -> f32 {
+    ((2.0 * f32::consts::PI).sqrt() * r).recip() * (-x.powi(2) / (2.0 * r.powi(2))).exp()
 }
 
 #[inline]
@@ -296,6 +309,8 @@ impl Scale {
             Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
             Type::Catrom => ((&|x| cubic_bc(0.0, 0.5, x)) as DynCallback, 2.0),
             Type::Mitchell => ((&|x| cubic_bc(1.0/3.0, 1.0/3.0, x)) as DynCallback, 2.0),
+            Type::BSpline => ((&|x| cubic_bc(1.0, 0.0, x)) as DynCallback, 2.0),
+            Type::Gaussian => ((&|x| gaussian(x, 0.5)) as DynCallback, 3.0),
             Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
             Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
         };
