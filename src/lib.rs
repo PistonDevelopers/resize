@@ -150,7 +150,7 @@ fn cubic_bc(b: f32, c: f32, x: f32) -> f32 {
 }
 
 // Taken from
-//https://github.com/image-rs/image/blob/81b3fe66fba04b8b60ba79b3641826df22fca67e/src/imageops/sample.rs#L181
+// https://github.com/image-rs/image/blob/81b3fe66fba04b8b60ba79b3641826df22fca67e/src/imageops/sample.rs#L181
 /// The Gaussian Function.
 /// ```r``` is the standard deviation.
 #[inline(always)]
