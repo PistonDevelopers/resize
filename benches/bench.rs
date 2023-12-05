@@ -46,6 +46,29 @@ fn precomputed_large(b: &mut Bencher) {
 }
 
 #[bench]
+fn multi_threaded(b: &mut Bencher) {
+    let (w1, h1) = (1280, 768);
+    let src1 = &vec![99; w1 * h1 * 3];
+
+    b.iter(|| {
+        std::thread::scope(|s| {
+            let s = &s;
+            let handles: Vec<_> = (0..16).map(|n| {
+                std::thread::Builder::new().spawn_scoped(s, move || {
+                    let (w2, h2) = (640-n*17, 512-n*17);
+                    let mut dst = vec![0; w2 * h2 * 3];
+
+                    let mut r = resize::new(w1, h1, w2, h2, RGB8, Catrom).unwrap();
+                    r.resize(src1.as_rgb(), dst.as_rgb_mut()).unwrap();
+                    dst
+                }).unwrap()
+            }).collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect::<Vec<_>>()
+        })
+    });
+}
+
+#[bench]
 fn tiny_rgba(b: &mut Bencher) {
     let (w1, h1) = (60, 60);
     let src1 = vec![99; w1 * h1 * 4];
