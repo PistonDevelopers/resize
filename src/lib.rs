@@ -61,26 +61,59 @@ mod no_std_float;
 use no_std_float::FloatExt;
 
 /// Resizing type to use.
+///
+/// For a detailed explanation and comparison of the different filters, see
+/// [this article](https://www.imagemagick.org/Usage/filter/).
 pub enum Type {
-    /// Point resizing.
+    /// Point resizing/nearest neighbor.
+    ///
+    /// This is the fastest method, but also has the lowest quality.
     Point,
-    /// Box resizing.
+    /// Box filter.
+    ///
+    /// This is a simple average operation. It's the ideal filter when resizing
+    /// by an integer fraction (e.g. 1/2x, 1/3x, 1/4x). When used for upscaling,
+    /// it will behave like [Type::Point].
     Box,
     /// Triangle (bilinear) resizing.
+    ///
+    /// A fast method that produces smooth results without ringing.
     Triangle,
-    /// Hermite (bicubic) resizing.
+    /// Hermite filter.
+    ///
+    /// A cubic filter that produces results between [Type::Triangle] and
+    /// [Type::Box].
     Hermite,
     /// Catmull-Rom (bicubic) resizing.
+    ///
+    /// This is the default cubic filter in many image editing programs. It
+    /// produces sharp results for both upscaling and downscaling.
     Catrom,
-    /// Resize using Mitchell-Netravali filter.
+    /// Resize using the (bicubic) Mitchell-Netravali filter.
+    ///
+    /// This filter is similar to [Type::Catrom], but produces slightly
+    /// smoother results, which can eliminate over-sharpening artifacts when
+    /// upscaling.
     Mitchell,
     /// B-spline (bicubic) resizing.
+    ///
+    /// This filter produces smoother results than [Type::Catrom] and
+    /// [Type::Mitchell]. It can appear a little blurry, but not as blurry as
+    /// [Type::Gaussian].
     BSpline,
     /// Gaussian resizing.
+    ///
+    /// Uses a Gaussian function as a filter. This is a slow filter produces
+    /// very smooth results akin to a slight gaussian blur.
     Gaussian,
     /// Resize using Sinc-windowed Sinc with radius of 3.
+    ///
+    /// A slow filter that produces sharp results, but can have ringing.
+    /// Recommended for high-quality image resizing.
     Lanczos3,
     /// Lagrange resizing.
+    ///
+    /// Similar to [Type::Lanczos3], but with less ringing.
     Lagrange,
     /// Resize with custom filter.
     Custom(Filter),
