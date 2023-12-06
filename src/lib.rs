@@ -67,17 +67,18 @@ use no_std_float::FloatExt;
 pub enum Type {
     /// Point resizing/nearest neighbor.
     ///
-    /// This is the fastest method, but also has the lowest quality.
+    /// This is the fastest method, but also has the lowest quality. It will
+    /// produce block/aliased results.
     Point,
     /// Box filter.
     ///
-    /// This is a simple average operation. It's the ideal filter when resizing
-    /// by an integer fraction (e.g. 1/2x, 1/3x, 1/4x). When used for upscaling,
-    /// it will behave like [Type::Point].
+    /// This is a simple average operation. It's the ideal filter when
+    /// downscaling by an integer fraction (e.g. 1/2x, 1/3x, 1/4x). When used
+    /// for upscaling, it will behave like [Type::Point].
     Box,
     /// Triangle (bilinear) resizing.
     ///
-    /// A fast method that produces smooth results without ringing.
+    /// A fast method that produces smooth results.
     Triangle,
     /// Hermite filter.
     ///
@@ -103,8 +104,9 @@ pub enum Type {
     BSpline,
     /// Gaussian resizing.
     ///
-    /// Uses a Gaussian function as a filter. This is a slow filter produces
-    /// very smooth results akin to a slight gaussian blur.
+    /// Uses a Gaussian function as a filter. This is a slow filter that produces
+    /// very smooth results akin to a slight gaussian blur. Its main advantage
+    /// is that it doesn't introduce ringing or aliasing artifacts.
     Gaussian,
     /// Resize using Sinc-windowed Sinc with radius of 3.
     ///
