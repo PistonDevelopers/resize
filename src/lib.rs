@@ -61,21 +61,62 @@ mod no_std_float;
 use no_std_float::FloatExt;
 
 /// Resizing type to use.
+///
+/// For a detailed explanation and comparison of the different filters, see
+/// [this article](https://www.imagemagick.org/Usage/filter/).
 pub enum Type {
-    /// Point resizing.
+    /// Point resizing/nearest neighbor.
+    ///
+    /// This is the fastest method, but also has the lowest quality. It will
+    /// produce block/aliased results.
     Point,
+    /// Box filter.
+    ///
+    /// This is a simple average operation. It's the ideal filter when
+    /// downscaling by an integer fraction (e.g. 1/2x, 1/3x, 1/4x). When used
+    /// for upscaling, it will behave like [Type::Point].
+    Box,
     /// Triangle (bilinear) resizing.
+    ///
+    /// A fast method that produces smooth results.
     Triangle,
+    /// Hermite filter.
+    ///
+    /// A cubic filter that produces results between [Type::Triangle] and
+    /// [Type::Box].
+    Hermite,
     /// Catmull-Rom (bicubic) resizing.
+    ///
+    /// This is the default cubic filter in many image editing programs. It
+    /// produces sharp results for both upscaling and downscaling.
     Catrom,
-    /// Resize using Mitchell-Netravali filter.
+    /// Resize using the (bicubic) Mitchell-Netravali filter.
+    ///
+    /// This filter is similar to [Type::Catrom], but produces slightly
+    /// smoother results, which can eliminate over-sharpening artifacts when
+    /// upscaling.
     Mitchell,
     /// B-spline (bicubic) resizing.
+    ///
+    /// This filter produces smoother results than [Type::Catrom] and
+    /// [Type::Mitchell]. It can appear a little blurry, but not as blurry as
+    /// [Type::Gaussian].
     BSpline,
     /// Gaussian resizing.
+    ///
+    /// Uses a Gaussian function as a filter. This is a slow filter that produces
+    /// very smooth results akin to a slight gaussian blur. Its main advantage
+    /// is that it doesn't introduce ringing or aliasing artifacts.
     Gaussian,
     /// Resize using Sinc-windowed Sinc with radius of 3.
+    ///
+    /// A slow filter that produces sharp results, but can have ringing.
+    /// Recommended for high-quality image resizing.
     Lanczos3,
+    /// Lagrange resizing.
+    ///
+    /// Similar to [Type::Lanczos3], but with less ringing.
+    Lagrange,
     /// Resize with custom filter.
     Custom(Filter),
 }
@@ -120,6 +161,15 @@ impl Filter {
 #[inline]
 fn point_kernel(_: f32) -> f32 {
     1.0
+}
+
+#[inline]
+fn box_kernel(x: f32) -> f32 {
+    if x.abs() <= 0.5 {
+        1.0
+    } else {
+        0.0
+    }
 }
 
 #[inline]
@@ -175,6 +225,27 @@ fn lanczos(taps: f32, x: f32) -> f32 {
     } else {
         0.0
     }
+}
+
+#[inline(always)]
+fn lagrange(x: f32, support: f32) -> f32 {
+    let x = x.abs();
+    if x > support {
+        return 0.0;
+    }
+
+    // Taken from
+    // https://github.com/ImageMagick/ImageMagick/blob/e8b7974e8756fb278ec85d896065a1b96ed85af9/MagickCore/resize.c#L406
+    let order = (2.0 * support) as isize;
+    let n = (support + x) as isize;
+    let mut value = 1.0;
+    for i in 0..order {
+        let d = (n - i) as f32;
+        if d != 0.0 {
+            value *= (d - x) / d;
+        }
+    }
+    value
 }
 
 /// Predefined constants for supported pixel formats.
@@ -306,12 +377,15 @@ impl Scale {
         }
         let filter = match filter_type {
             Type::Point => (&point_kernel as DynCallback, 0.0_f32),
+            Type::Box => (&box_kernel as DynCallback, 1.0),
             Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
+            Type::Hermite => ((&|x| cubic_bc(0.0, 0.0, x)) as DynCallback, 1.0),
             Type::Catrom => ((&|x| cubic_bc(0.0, 0.5, x)) as DynCallback, 2.0),
             Type::Mitchell => ((&|x| cubic_bc(1.0/3.0, 1.0/3.0, x)) as DynCallback, 2.0),
             Type::BSpline => ((&|x| cubic_bc(1.0, 0.0, x)) as DynCallback, 2.0),
             Type::Gaussian => ((&|x| gaussian(x, 0.5)) as DynCallback, 3.0),
             Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
+            Type::Lagrange => ((&|x| lagrange(x, 2.0)) as DynCallback, 2.0),
             Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
         };
 
