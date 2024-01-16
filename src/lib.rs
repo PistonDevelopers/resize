@@ -70,21 +70,10 @@ pub enum Type {
     /// This is the fastest method, but also has the lowest quality. It will
     /// produce block/aliased results.
     Point,
-    /// Box filter.
-    ///
-    /// This is a simple average operation. It's the ideal filter when
-    /// downscaling by an integer fraction (e.g. 1/2x, 1/3x, 1/4x). When used
-    /// for upscaling, it will behave like [Type::Point].
-    Box,
     /// Triangle (bilinear) resizing.
     ///
     /// A fast method that produces smooth results.
     Triangle,
-    /// Hermite filter.
-    ///
-    /// A cubic filter that produces results between [Type::Triangle] and
-    /// [Type::Box].
-    Hermite,
     /// Catmull-Rom (bicubic) resizing.
     ///
     /// This is the default cubic filter in many image editing programs. It
@@ -113,10 +102,6 @@ pub enum Type {
     /// A slow filter that produces sharp results, but can have ringing.
     /// Recommended for high-quality image resizing.
     Lanczos3,
-    /// Lagrange resizing.
-    ///
-    /// Similar to [Type::Lanczos3], but with less ringing.
-    Lagrange,
     /// Resize with custom filter.
     Custom(Filter),
 }
@@ -144,17 +129,41 @@ impl Filter {
     }
 
     /// Helper to create Cubic filter with custom B and C parameters.
-    #[must_use]
+    #[doc(hidden)]
     #[deprecated(note = "use Type enum")]
     pub fn new_cubic(b: f32, c: f32) -> Self {
         Self::new(Box::new(move |x| cubic_bc(b, c, x)), 2.0)
     }
 
     /// Helper to create Lanczos filter with custom radius.
-    #[must_use]
+    #[doc(hidden)]
     #[deprecated(note = "use Type enum")]
     pub fn new_lanczos(radius: f32) -> Self {
         Self::new(Box::new(move |x| lanczos(radius, x)), radius)
+    }
+
+    /// Hermite filter.
+    ///
+    /// A cubic filter that produces results between [Type::Triangle] and
+    /// [Type::Box].
+    pub fn hermite(radius: f32) -> Self {
+        Self::new(Box::new(move |x| cubic_bc(0.0, 0.0, x)), radius)
+    }
+
+    /// Lagrange resizing.
+    ///
+    /// Similar to [Type::Lanczos3], but with less ringing.
+    pub fn lagrange(radius: f32) -> Self {
+        Self::new(Box::new(move |x| lagrange(radius, x)), radius)
+    }
+
+    /// Box filter.
+    ///
+    /// This is a simple average operation. It's the ideal filter when
+    /// downscaling by an integer fraction (e.g. 1/2x, 1/3x, 1/4x). When used
+    /// for upscaling, it will behave like [Type::Point].
+    pub fn box_filter(radius: f32) -> Self {
+        Self::new(Box::new(box_kernel), radius)
     }
 }
 
@@ -377,15 +386,12 @@ impl Scale {
         }
         let filter = match filter_type {
             Type::Point => (&point_kernel as DynCallback, 0.0_f32),
-            Type::Box => (&box_kernel as DynCallback, 1.0),
             Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
-            Type::Hermite => ((&|x| cubic_bc(0.0, 0.0, x)) as DynCallback, 1.0),
             Type::Catrom => ((&|x| cubic_bc(0.0, 0.5, x)) as DynCallback, 2.0),
             Type::Mitchell => ((&|x| cubic_bc(1.0/3.0, 1.0/3.0, x)) as DynCallback, 2.0),
             Type::BSpline => ((&|x| cubic_bc(1.0, 0.0, x)) as DynCallback, 2.0),
             Type::Gaussian => ((&|x| gaussian(x, 0.5)) as DynCallback, 3.0),
             Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
-            Type::Lagrange => ((&|x| lagrange(x, 2.0)) as DynCallback, 2.0),
             Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
         };
 
