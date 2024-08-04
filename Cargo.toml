@@ -1,6 +1,6 @@
 [package]
 name = "resize"
-version = "0.8.4"
+version = "0.8.5"
 description = "Simple image resampling library in pure Rust."
 authors = ["Kornel <kornel@geekhood.net>", "Kagami Hiiragi <kagami@genshiken.org>"]
 categories = ["graphics", "multimedia::images", "no-std"]
@@ -12,7 +12,7 @@ license = "MIT"
 readme = "README.md"
 include = ["Cargo.toml", "README.md", "LICENSE", "src/*.rs"]
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.61"
 
 [features]
 default = ["std", "rayon"]
@@ -23,12 +23,12 @@ no_std = ["dep:libm", "dep:hashbrown"]
 rayon = ["dep:rayon", "std"]
 
 [dev-dependencies]
-png = "0.17.7"
+png = "0.17.13"
 
 [dependencies]
-rgb = { version = "0.8.36", default-features = false }
-libm = { version = "0.2.7", optional = true }
-hashbrown = { version = "0.14.0", optional = true }
+rgb = { version = "0.8.47", default-features = false }
+libm = { version = "0.2.8", optional = true }
+hashbrown = { version = "0.12.3", optional = true }
 rayon = { version = "1.7.0", optional = true }
 
 [package.metadata.docs.rs]

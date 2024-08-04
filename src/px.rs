@@ -1,7 +1,7 @@
 use crate::formats;
-pub use rgb::alt::Gray;
-pub use rgb::RGB;
-pub use rgb::RGBA;
+pub use rgb::Gray;
+pub use rgb::Rgb as RGB;
+pub use rgb::Rgba as RGBA;
 
 /// Use [`Pixel`](crate::Pixel) presets to specify pixel format.
 ///
