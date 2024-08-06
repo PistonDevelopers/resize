@@ -399,7 +399,7 @@ impl Scale {
         if dest_width == 0 || dest_height == 0 {
             return Err(Error::InvalidParameters);
         }
-        let filter = filter.as_filter_ref();
+        let filter = filter_type.as_filter_ref();
 
         // filters very often create repeating patterns,
         // so overall memory used by them can be reduced
