@@ -106,6 +106,21 @@ pub enum Type {
     Custom(Filter),
 }
 
+impl Type {
+    fn as_filter_ref(&self) -> (DynCallback<'_>, f32) {
+        match self {
+            Type::Point => (&point_kernel as DynCallback, 0.0_f32),
+            Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
+            Type::Catrom => ((&|x| cubic_bc(0.0, 0.5, x)) as DynCallback, 2.0),
+            Type::Mitchell => ((&|x| cubic_bc(1.0/3.0, 1.0/3.0, x)) as DynCallback, 2.0),
+            Type::BSpline => ((&|x| cubic_bc(1.0, 0.0, x)) as DynCallback, 2.0),
+            Type::Gaussian => ((&|x| gaussian(x, 0.5)) as DynCallback, 3.0),
+            Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
+            Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
+        }
+    }
+}
+
 /// Resampling filter.
 pub struct Filter {
     kernel: Box<dyn Fn(f32) -> f32>,
@@ -384,16 +399,7 @@ impl Scale {
         if dest_width == 0 || dest_height == 0 {
             return Err(Error::InvalidParameters);
         }
-        let filter = match filter_type {
-            Type::Point => (&point_kernel as DynCallback, 0.0_f32),
-            Type::Triangle => (&triangle_kernel as DynCallback, 1.0),
-            Type::Catrom => ((&|x| cubic_bc(0.0, 0.5, x)) as DynCallback, 2.0),
-            Type::Mitchell => ((&|x| cubic_bc(1.0/3.0, 1.0/3.0, x)) as DynCallback, 2.0),
-            Type::BSpline => ((&|x| cubic_bc(1.0, 0.0, x)) as DynCallback, 2.0),
-            Type::Gaussian => ((&|x| gaussian(x, 0.5)) as DynCallback, 3.0),
-            Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
-            Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
-        };
+        let filter = filter.as_filter_ref();
 
         // filters very often create repeating patterns,
         // so overall memory used by them can be reduced
@@ -416,7 +422,8 @@ impl Scale {
         })
     }
 
-    fn calc_coeffs(s1: NonZeroUsize, s2: usize, (kernel, support): (&dyn Fn(f32) -> f32, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
+    #[inline(never)]
+    fn calc_coeffs(s1: NonZeroUsize, s2: usize, (kernel, support): (DynCallback<'_>, f32), recycled_coeffs: &mut HashMap<(usize, [u8; 4], [u8; 4]), Arc<[f32]>>) -> Result<Vec<CoeffsLine>> {
         let ratio = s1.get() as f64 / s2 as f64;
         // Scale the filter when downsampling.
         let filter_scale = ratio.max(1.);
