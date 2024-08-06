@@ -106,6 +106,22 @@ pub enum Type {
     Custom(Filter),
 }
 
+impl PartialEq for Type {
+    /// `Custom` is not comparable
+    fn eq(&self, other: &Type) -> bool {
+        match (self, other) {
+            (Type::Point, Type::Point) |
+            (Type::Triangle, Type::Triangle) |
+            (Type::Catrom, Type::Catrom) |
+            (Type::Mitchell, Type::Mitchell) |
+            (Type::BSpline, Type::BSpline) |
+            (Type::Gaussian, Type::Gaussian) |
+            (Type::Lanczos3, Type::Lanczos3) => true,
+            _ => false,
+        }
+    }
+}
+
 impl Type {
     fn as_filter_ref(&self) -> (DynCallback<'_>, f32) {
         match self {
@@ -140,6 +156,7 @@ impl Filter {
     #[must_use]
     #[inline(always)]
     pub fn new(kernel: Box<dyn Fn(f32) -> f32>, support: f32) -> Self {
+        debug_assert!(support.is_finite());
         Self { kernel, support }
     }
 
@@ -393,13 +410,28 @@ struct CoeffsLine {
 type DynCallback<'a> = &'a dyn Fn(f32) -> f32;
 
 impl Scale {
+    #[inline]
     pub fn new(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type: Type) -> Result<Self> {
+        Self::new_xy_inner(source_width, source_heigth, dest_width, dest_height, filter_type.as_filter_ref(), None)
+    }
+
+    /// Allows different filters for horizontal and vertical
+    #[inline]
+    pub fn new_xy(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter_type_horizontal: &Type, filter_type_vertical: &Type) -> Result<Self> {
+        let (f1, f2) = if filter_type_horizontal == filter_type_vertical {
+            (filter_type_horizontal.as_filter_ref(), None)
+        } else {
+            (filter_type_horizontal.as_filter_ref(), Some(filter_type_vertical.as_filter_ref()))
+        };
+        Self::new_xy_inner(source_width, source_heigth, dest_width, dest_height, f1, f2)
+    }
+
+    fn new_xy_inner(source_width: usize, source_heigth: usize, dest_width: usize, dest_height: usize, filter1: (DynCallback<'_>, f32), filter2: Option<(DynCallback<'_>, f32)>) -> Result<Self> {
         let source_width = NonZeroUsize::new(source_width).ok_or(Error::InvalidParameters)?;
         let source_heigth = NonZeroUsize::new(source_heigth).ok_or(Error::InvalidParameters)?;
         if dest_width == 0 || dest_height == 0 {
             return Err(Error::InvalidParameters);
         }
-        let filter = filter.as_filter_ref();
 
         // filters very often create repeating patterns,
         // so overall memory used by them can be reduced
@@ -407,11 +439,11 @@ impl Scale {
         let mut recycled_coeffs = HashMap::new();
         recycled_coeffs.try_reserve(dest_width.max(dest_height))?;
 
-        let coeffs_w = Self::calc_coeffs(source_width, dest_width, filter, &mut recycled_coeffs)?;
-        let coeffs_h = if source_heigth == source_width && dest_height == dest_width {
+        let coeffs_w = Self::calc_coeffs(source_width, dest_width, filter1, &mut recycled_coeffs)?;
+        let coeffs_h = if source_heigth == source_width && dest_height == dest_width && filter2.is_none() {
             coeffs_w.clone()
         } else {
-            Self::calc_coeffs(source_heigth, dest_height, filter, &mut recycled_coeffs)?
+            Self::calc_coeffs(source_heigth, dest_height, filter2.unwrap_or(filter1), &mut recycled_coeffs)?
         };
 
         Ok(Self {
