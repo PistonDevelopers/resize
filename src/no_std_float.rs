@@ -8,6 +8,7 @@ pub(crate) trait FloatExt {
     fn trunc(self) -> Self;
     fn fract(self) -> Self;
     fn sin(self) -> Self;
+    fn exp(self) -> Self;
     fn powi(self, n: i32) -> Self;
 }
 
@@ -48,6 +49,10 @@ impl FloatExt for f32 {
     fn powi(self, n: i32) -> Self {
         libm::powf(self, n as _)
     }
+    #[inline]
+    fn exp(self) -> Self {
+        libm::expf(self)
+    }
 }
 
 impl FloatExt for f64 {
@@ -86,5 +91,9 @@ impl FloatExt for f64 {
     #[inline]
     fn powi(self, n: i32) -> Self {
         libm::pow(self, n as _)
+    }
+    #[inline]
+    fn exp(self) -> Self {
+        libm::exp(self)
     }
 }
