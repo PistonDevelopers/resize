@@ -151,17 +151,17 @@ impl<F: ToFloat, T: ToFloat> PixelFormat for formats::Gray<F, T> {
 
     #[inline(always)]
     fn add(&self, acc: &mut Self::Accumulator, inp: Gray<F>, coeff: f32) {
-        acc.0 += inp.0.to_float() * coeff;
+        *acc.value_mut() += inp.value().to_float() * coeff;
     }
 
     #[inline(always)]
     fn add_acc(acc: &mut Self::Accumulator, inp: Self::Accumulator, coeff: f32) {
-        acc.0 += inp.0 * coeff;
+        *acc.value_mut() += inp.value() * coeff;
     }
 
     #[inline(always)]
     fn into_pixel(&self, acc: Self::Accumulator) -> Gray<T> {
-        Gray::new(T::from_float(acc.0))
+        Gray::new(T::from_float(acc.value()))
     }
 }
 
