@@ -116,7 +116,7 @@ impl Type {
             Type::BSpline => ((&|x| cubic_bc(1.0, 0.0, x)) as DynCallback, 2.0),
             Type::Gaussian => ((&|x| gaussian(x, 0.5)) as DynCallback, 3.0),
             Type::Lanczos3 => ((&|x| lanczos(3.0, x)) as DynCallback, 3.0),
-            Type::Custom(ref f) => (&f.kernel as DynCallback, f.support),
+            Type::Custom(f) => (&f.kernel as DynCallback, f.support),
         }
     }
 }
@@ -673,6 +673,7 @@ impl fmt::Display for Error {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    use rgb::bytemuck;
     use super::*;
 
     #[test]
@@ -729,27 +730,23 @@ mod tests {
 
     #[test]
     fn resize_stride() {
-        use rgb::FromSlice;
-
         let mut r = new(2, 2, 3, 4, Pixel::Gray16, Type::Triangle).unwrap();
-        let mut dst = vec![0; 12];
-        r.resize_stride([
-            65535,65535,1,2,
+        let mut dst = vec![0u16; 12];
+        r.resize_stride(bytemuck::cast_slice(&[
+            65535u16,65535,1,2,
             65535,65535,3,4,
-        ].as_gray(), 4, dst.as_gray_mut()).unwrap();
+        ]), 4, bytemuck::cast_slice_mut(&mut dst)).unwrap();
         assert_eq!(&dst, &[65535; 12]);
     }
 
     #[test]
     fn resize_float() {
-        use rgb::FromSlice;
-
         let mut r = new(2, 2, 3, 4, Pixel::GrayF32, Type::Triangle).unwrap();
-        let mut dst = vec![0.; 12];
-        r.resize_stride([
-            65535.,65535.,1.,2.,
+        let mut dst = vec![0_f32; 12];
+        r.resize_stride(bytemuck::cast_slice(&[
+            65535_f32,65535.,1.,2.,
             65535.,65535.,3.,4.,
-        ].as_gray(), 4, dst.as_gray_mut()).unwrap();
+        ]), 4, bytemuck::cast_slice_mut(&mut dst)).unwrap();
         assert_eq!(&dst, &[65535.; 12]);
     }
 }
